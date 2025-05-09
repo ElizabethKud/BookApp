@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-	email VARCHAR(100) NOT NULL UNIQUE,
+    email VARCHAR(100) NOT NULL UNIQUE,
     registration_date TIMESTAMP NOT NULL DEFAULT NOW(),
     role VARCHAR(50) CHECK (role IN ('admin', 'user')) NOT NULL DEFAULT 'user'
 );
@@ -16,8 +16,7 @@ CREATE TABLE IF NOT EXISTS books (
     publication_year INTEGER CHECK (publication_year > 0),
     pages_count INTEGER,
     language VARCHAR(50),
-    file_path VARCHAR(255), -- Для локальных книг
-    content TEXT -- Для базовых книг, хранящихся в базе
+    file_path VARCHAR(255)
 );
 
 -- Создание таблицы авторов
@@ -37,9 +36,8 @@ CREATE TABLE IF NOT EXISTS ratings (
     book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 10),
     rating_date TIMESTAMP NOT NULL DEFAULT NOW(),
-    UNIQUE (user_id, book_id) -- чтобы один пользователь мог поставить оценку только один раз
+    UNIQUE (user_id, book_id)
 );
-
 
 -- Создание таблицы жанров
 CREATE TABLE IF NOT EXISTS genres (
@@ -61,7 +59,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 CREATE TABLE IF NOT EXISTS display_settings (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    background_color VARCHAR(50), -- Например, #FFFFFF
+    background_color VARCHAR(50),
     font_color VARCHAR(50),
     font_size INTEGER DEFAULT 16,
     font_family VARCHAR(100) DEFAULT 'Arial'
@@ -73,7 +71,7 @@ CREATE TABLE IF NOT EXISTS favorite_books (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     date_added TIMESTAMP NOT NULL DEFAULT NOW(),
-    UNIQUE (user_id, book_id) -- нельзя добавить одну и ту же книгу дважды
+    UNIQUE (user_id, book_id)
 );
 
 -- Создание таблицы истории чтения
@@ -83,7 +81,7 @@ CREATE TABLE IF NOT EXISTS reading_history (
     book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     last_read_page INTEGER,
     last_read_date TIMESTAMP NOT NULL DEFAULT NOW(),
-    UNIQUE (user_id, book_id) -- одна запись на книгу на пользователя
+    UNIQUE (user_id, book_id)
 );
 
 -- Создание таблицы связей книга-автор

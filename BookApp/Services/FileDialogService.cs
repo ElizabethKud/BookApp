@@ -1,4 +1,6 @@
 ﻿using Microsoft.Win32;
+using System;
+using System.Windows;
 
 namespace BookApp.Services
 {
@@ -6,11 +8,20 @@ namespace BookApp.Services
     {
         public string OpenFileDialog()
         {
-            var openFileDialog = new OpenFileDialog
+            try
             {
-                Filter = "Book Files (*.epub, *.fb2, *.txt)|*.epub;*.fb2;*.txt|All Files (*.*)|*.*"
-            };
-            return openFileDialog.ShowDialog() == true ? openFileDialog.FileName : null;
+                var openFileDialog = new OpenFileDialog
+                {
+                    Filter = "Книги (*.epub, *.fb2, *.txt)|*.epub;*.fb2;*.txt|Все файлы (*.*)|*.*",
+                    Multiselect = false
+                };
+                return openFileDialog.ShowDialog() == true ? openFileDialog.FileName : null;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при открытии диалога: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                return null;
+            }
         }
     }
 }
