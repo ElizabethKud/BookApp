@@ -9,7 +9,6 @@ public class Book
     public int? PagesCount { get; set; }
     public string Language { get; set; }
     public string FilePath { get; set; }
-    public string Content { get; set; }
 
     // Навигационные свойства
     public virtual ICollection<Rating> Ratings { get; set; } = new List<Rating>();

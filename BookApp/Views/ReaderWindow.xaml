@@ -1,0 +1,34 @@
+﻿<Window x:Class="BookApp.Views.ReaderWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:BookApp.ViewModels"
+        Title="Book Reader" Height="600" Width="800">
+    <Window.DataContext>
+        <vm:ReaderViewModel />
+    </Window.DataContext>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Settings Panel -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10" Background="#F0F0F0">
+            <Button Content="Open Book" Command="{Binding OpenBookCommand}" Margin="5" />
+            <ComboBox ItemsSource="{Binding AvailableFonts}" SelectedItem="{Binding SelectedFont}" Width="100" Margin="5" />
+            <Slider Minimum="12" Maximum="36" Value="{Binding FontSize}" Width="100" Margin="5" />
+            <ComboBox ItemsSource="{Binding AvailableColors}" SelectedItem="{Binding BackgroundColor}" Width="100" Margin="5" />
+            <ComboBox ItemsSource="{Binding AvailableColors}" SelectedItem="{Binding FontColor}" Width="100" Margin="5" />
+            <Button Content="Apply Settings" Command="{Binding ApplySettingsCommand}" Margin="5" />
+        </StackPanel>
+
+        <!-- Book Content -->
+        <FlowDocumentScrollViewer Grid.Row="1" Margin="10">
+            <FlowDocument FontFamily="{Binding SelectedFont}" FontSize="{Binding FontSize}" Background="{Binding BackgroundColor}" Foreground="{Binding FontColor}">
+                <Paragraph TextAlignment="Justify">
+                    <Run Text="{Binding BookContent}" />
+                </Paragraph>
+            </FlowDocument>
+        </FlowDocumentScrollViewer>
+    </Grid>
+</Window>

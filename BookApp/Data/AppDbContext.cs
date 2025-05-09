@@ -70,7 +70,6 @@ public class AppDbContext : DbContext
             entity.Property(b => b.PagesCount).HasColumnName("pages_count");
             entity.Property(b => b.Language).HasColumnName("language");
             entity.Property(b => b.FilePath).HasColumnName("file_path");
-            entity.Property(b => b.Content).HasColumnName("content");
             
             entity.Property(b => b.PublicationYear).IsRequired(false);
             entity.HasCheckConstraint("CK_Book_PublicationYear", "publication_year > 0");

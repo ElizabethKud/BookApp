@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using BookApp.Data;
 using BookApp.Models;
+using BookApp.Views;
 using BCrypt.Net;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,7 +31,9 @@ namespace BookApp
             {
                 MessageBox.Show($"Добро пожаловать, {user.Username}!", "Успешный вход", MessageBoxButton.OK, MessageBoxImage.Information);
 
-                // здесь можно переключиться на другую страницу/окно, если потребуется
+                var readerWindow = new ReaderWindow();
+                readerWindow.Show();
+                this.Close();
             }
             else
             {
@@ -43,9 +46,8 @@ namespace BookApp
             string username = RegisterUsernameTextBox.Text.Trim();
             string email = RegisterEmailTextBox.Text.Trim();
             string password = RegisterPasswordBox.Password;
-            string confirmPassword = RegisterConfirmPasswordBox.Password;
+            string confirmPassword = RegisterPasswordBox.Password;
 
-            // Простейшая валидация
             if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(email) ||
                 string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(confirmPassword))
             {
@@ -61,7 +63,7 @@ namespace BookApp
 
             if (password != confirmPassword)
             {
-                MessageBox.Show("Пароли не совпадают", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Пароли не совпадают", " blown-up window");
                 return;
             }
 
@@ -90,11 +92,10 @@ namespace BookApp
             db.SaveChanges();
 
             MessageBox.Show("Регистрация успешна!", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
-            
-            // После успешной регистрации
-            var mainWindow = new MainWindow();  // Главная форма приложения
-            mainWindow.Show();
-            this.Close();  // Закрываем окно регистрации
+
+            var readerWindow = new ReaderWindow();
+            readerWindow.Show();
+            this.Close();
         }
     }
 }
