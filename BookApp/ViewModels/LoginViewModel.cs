@@ -2,7 +2,6 @@
 using System.Windows;
 using BookApp.Data;
 using BookApp.Models;
-using BookApp.Views;
 using Microsoft.EntityFrameworkCore;
 
 namespace BookApp
@@ -28,8 +27,8 @@ namespace BookApp
             {
                 MessageBox.Show($"Добро пожаловать, {user.Username}!", "Успешный вход", MessageBoxButton.OK, MessageBoxImage.Information);
 
-                var readerWindow = new ReaderWindow();
-                readerWindow.Show();
+                var mainWindow = new MainWindow(user.Username);
+                mainWindow.Show();
                 this.Close();
             }
             else
@@ -90,8 +89,8 @@ namespace BookApp
 
             MessageBox.Show("Регистрация успешна!", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
 
-            var readerWindow = new ReaderWindow();
-            readerWindow.Show();
+            var mainWindow = new MainWindow(newUser.Username);
+            mainWindow.Show();
             this.Close();
         }
     }

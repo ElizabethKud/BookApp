@@ -11,6 +11,19 @@ namespace BookApp
             InitializeComponent();
             currentUser = username;
             NicknameTextBox.Text = currentUser;
+
+            // Заполнение комбобоксов цветами
+            BackgroundColorComboBox.Items.Add("Белый");
+            BackgroundColorComboBox.Items.Add("Черный");
+            FontColorComboBox.Items.Add("Черный");
+            FontColorComboBox.Items.Add("Белый");
+            FontFamilyComboBox.Items.Add("Arial");
+            FontFamilyComboBox.Items.Add("Times New Roman");
+
+            // Настроим начальные значения
+            BackgroundColorComboBox.SelectedIndex = 0;
+            FontColorComboBox.SelectedIndex = 0;
+            FontFamilyComboBox.SelectedIndex = 0;
         }
 
         private void DefaultBooks_Click(object sender, RoutedEventArgs e)
