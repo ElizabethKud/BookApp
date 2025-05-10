@@ -10,10 +10,20 @@
 
     <ItemGroup>
       <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+      <PackageReference Include="MaterialDesignColors" Version="5.2.0" />
+      <PackageReference Include="MaterialDesignExtensions" Version="4.0.0-a02" />
       <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
       <PackageReference Include="Microsoft.EntityFrameworkCore.Proxies" Version="8.0.0" />
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.0" />
+      <PackageReference Include="PdfiumViewer" Version="2.13.0" />
+      <PackageReference Include="PdfiumViewer.Core" Version="1.0.4" />
       <PackageReference Include="VersOne.Epub" Version="3.3.4" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ApplicationDefinition Update="App.xaml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </ApplicationDefinition>
     </ItemGroup>
 
 </Project>

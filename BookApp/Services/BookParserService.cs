@@ -2,6 +2,7 @@
 using System.Text;
 using System.Xml.Linq;
 using VersOne.Epub;
+using PdfiumViewer; 
 
 namespace BookApp.Services
 {
@@ -14,7 +15,7 @@ namespace BookApp.Services
             {
                 ".epub" => ParseEpub(filePath),
                 ".fb2" => ParseFb2(filePath),
-                ".txt" => ParseTxt(filePath),
+                ".pdf" => ParsePdf(filePath),
                 _ => throw new NotSupportedException("Unsupported file format")
             };
         }
@@ -37,9 +38,19 @@ namespace BookApp.Services
             return body?.Value ?? string.Empty;
         }
 
-        private string ParseTxt(string filePath)
+        private string ParsePdf(string filePath)
         {
-            return File.ReadAllText(filePath);
+            using var document = PdfDocument.Load(filePath);
+            var content = new StringBuilder();
+
+            for (int i = 0; i < document.PageCount; i++)
+            {
+                using var page = document.Render(i, 300, 300, true); // изображение
+                var text = document.GetPdfText(i); // вот рабочая альтернатива
+                content.AppendLine(text);
+            }
+
+            return content.ToString();
         }
     }
 }

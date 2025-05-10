@@ -16,8 +16,7 @@ CREATE TABLE IF NOT EXISTS books (
     publication_year INTEGER CHECK (publication_year > 0),
     pages_count INTEGER,
     language VARCHAR(50),
-    file_path VARCHAR(255), -- Для локальных книг
-    content TEXT -- Для базовых книг, хранящихся в базе
+    file_path VARCHAR(255) NOT NULL, -- Для локальных книг
 );
 
 -- Создание таблицы авторов
@@ -99,3 +98,5 @@ CREATE TABLE IF NOT EXISTS book_genre (
     book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     genre_id INTEGER NOT NULL REFERENCES genres(id) ON DELETE CASCADE
 );
+
+SELECT * from users;
