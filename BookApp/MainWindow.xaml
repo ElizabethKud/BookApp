@@ -60,16 +60,44 @@
 
             <!-- Вкладка Книга -->
             <TabItem Header="Книга">
-                <ScrollViewer Margin="10" ScrollChanged="BookScrollViewer_ScrollChanged">
-                    <TextBlock x:Name="BookTextBlock"
-                               Text="Здесь будет отображаться текст книги..."
-                               TextWrapping="Wrap"
-                               FontSize="16"
-                               FontFamily="Arial"
-                               Foreground="Black"
-                               Background="White"
-                               Padding="10"/>
-                </ScrollViewer>
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Hidden">
+                            <TextBlock x:Name="LeftPageTextBlock"
+                                       TextWrapping="Wrap"
+                                       FontSize="16"
+                                       FontFamily="Arial"
+                                       Foreground="Black"
+                                       Background="White"
+                                       Padding="10"/>
+                        </ScrollViewer>
+
+                        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Hidden">
+                            <TextBlock x:Name="RightPageTextBlock"
+                                       TextWrapping="Wrap"
+                                       FontSize="16"
+                                       FontFamily="Arial"
+                                       Foreground="Black"
+                                       Background="White"
+                                       Padding="10"/>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10">
+                        <Button Content="← Пред." Click="PrevPage_Click" Margin="5"/>
+                        <Button Content="След. →" Click="NextPage_Click" Margin="5"/>
+                    </StackPanel>
+                </Grid>
             </TabItem>
 
             <!-- Вкладка Оформление -->

@@ -19,6 +19,12 @@ namespace BookApp.Services
                 _ => throw new NotSupportedException("Unsupported file format")
             };
         }
+        
+        private string StripHtml(string html)
+        {
+            var text = System.Text.RegularExpressions.Regex.Replace(html, "<.*?>", string.Empty);
+            return System.Net.WebUtility.HtmlDecode(text);
+        }
 
         private string ParseEpub(string filePath)
         {
@@ -26,7 +32,7 @@ namespace BookApp.Services
             var content = new StringBuilder();
             foreach (var textFile in epubBook.ReadingOrder)
             {
-                content.AppendLine(textFile.Content);
+                content.AppendLine(StripHtml(textFile.Content));
             }
             return content.ToString();
         }
@@ -35,7 +41,7 @@ namespace BookApp.Services
         {
             var doc = XDocument.Load(filePath);
             var body = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "body");
-            return body?.Value ?? string.Empty;
+            return StripHtml(body?.Value ?? string.Empty);
         }
 
         private string ParsePdf(string filePath)

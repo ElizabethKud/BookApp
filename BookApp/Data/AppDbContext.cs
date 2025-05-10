@@ -150,12 +150,10 @@ public class AppDbContext : DbContext
             entity.Property(d => d.FontColor).HasColumnName("font_color");
             entity.Property(d => d.FontSize).HasColumnName("font_size");
             entity.Property(d => d.FontFamily).HasColumnName("font_family");
-            
             entity.HasOne(d => d.User)
                 .WithMany(u => u.DisplaySettings)
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
-            
             entity.Property(d => d.FontSize).HasDefaultValue(16);
             entity.Property(d => d.FontFamily).HasDefaultValue("Arial");
         });
