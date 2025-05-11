@@ -27,4 +27,10 @@
       </ApplicationDefinition>
     </ItemGroup>
 
+    <ItemGroup>
+      <None Update="Books\Default\**\*.*">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
 </Project>
