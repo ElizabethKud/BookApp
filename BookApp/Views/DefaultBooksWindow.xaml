@@ -1,9 +1,14 @@
 ﻿<Window x:Class="BookApp.Views.DefaultBooksWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:BookApp"
+        xmlns:services="clr-namespace:BookApp.Services"
         Title="Базовые книги" Height="400" Width="600"
-        Background="#F0F0F0">
+        Background="#F0F0F0"
+        WindowStartupLocation="CenterOwner">
     <Window.Resources>
+        <services:AuthorNameConverter x:Key="AuthorNameConverter"/>
+        <services:AverageRatingConverter x:Key="AverageRatingConverter"/>
         <Style TargetType="Button">
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Padding" Value="10,5"/>
@@ -73,8 +78,8 @@
         <DataGrid x:Name="BooksGrid" Grid.Row="0" SelectionChanged="BooksGrid_SelectionChanged">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Название" Binding="{Binding Title}" Width="*"/>
-                <DataGridTextColumn Header="Автор" Binding="{Binding BookAuthors[0].Author.LastName}" Width="*"/>
-                <DataGridTextColumn Header="Язык" Binding="{Binding Language}" Width="*"/>
+                <DataGridTextColumn Header="Автор" Binding="{Binding BookAuthors, Converter={StaticResource AuthorNameConverter}}" Width="*"/>
+                <DataGridTextColumn Header="Рейтинг" Binding="{Binding Ratings, Converter={StaticResource AverageRatingConverter}}" Width="Auto"/>
                 <DataGridTemplateColumn Header="Действия" Width="Auto">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>

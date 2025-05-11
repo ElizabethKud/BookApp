@@ -16,7 +16,6 @@ namespace BookApp.Services
 
         public DatabaseService()
         {
-            // Для простоты используем Console Logger. В реальном приложении можно внедрить ILogger через DI.
             var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
             _logger = loggerFactory.CreateLogger<DatabaseService>();
         }
@@ -26,11 +25,6 @@ namespace BookApp.Services
             try
             {
                 using var db = CreateDbContext();
-                if (db.Books.Any(b => b.IsDefault))
-                {
-                    _logger.LogInformation("Default books already initialized.");
-                    return;
-                }
 
                 if (!Directory.Exists(_defaultBooksPath))
                 {
@@ -47,7 +41,7 @@ namespace BookApp.Services
                         FilePath = f,
                         Language = "Unknown",
                         PublicationYear = null,
-                        PagesCount = 0,
+                        PagesCount = null,
                         IsDefault = true
                     })
                     .ToList();
@@ -58,6 +52,7 @@ namespace BookApp.Services
                     return;
                 }
 
+                int addedCount = 0;
                 foreach (var book in defaultBooks)
                 {
                     if (db.Books.Any(b => b.FilePath == book.FilePath))
@@ -67,40 +62,45 @@ namespace BookApp.Services
                     }
 
                     db.Books.Add(book);
+                    addedCount++;
+                }
 
-                    var author = db.Authors.FirstOrDefault(a => a.LastName == "Unknown");
-                    if (author == null)
+                if (addedCount > 0)
+                {
+                    db.SaveChanges();
+
+                    foreach (var book in defaultBooks.Where(b => b.Id > 0)) // Только добавленные книги
                     {
-                        author = new Author
+                        var author = db.Authors.FirstOrDefault(a => a.LastName == "Unknown");
+                        if (author == null)
                         {
-                            LastName = "Unknown",
-                            FirstName = "",
-                            MiddleName = "",
-                            BirthYear = null,
-                            Country = "Unknown"
+                            author = new Author
+                            {
+                                LastName = "Unknown",
+                                FirstName = "",
+                                MiddleName = "",
+                                BirthYear = null,
+                                Country = "Unknown"
+                            };
+                            db.Authors.Add(author);
+                            db.SaveChanges();
+                        }
+
+                        var bookAuthor = new BookAuthor
+                        {
+                            BookId = book.Id,
+                            AuthorId = author.Id
                         };
-                        db.Authors.Add(author);
+                        db.BookAuthors.Add(bookAuthor);
                     }
 
-                    // Связь добавляется после сохранения книги, так как Book.Id нужен
+                    db.SaveChanges();
+                    _logger.LogInformation("Successfully initialized {Count} default books.", addedCount);
                 }
-
-                db.SaveChanges();
-
-                // Добавляем связи BookAuthor после сохранения книг
-                foreach (var book in defaultBooks)
+                else
                 {
-                    var author = db.Authors.First(a => a.LastName == "Unknown");
-                    var bookAuthor = new BookAuthor
-                    {
-                        BookId = book.Id,
-                        AuthorId = author.Id
-                    };
-                    db.BookAuthors.Add(bookAuthor);
+                    _logger.LogInformation("No new default books added.");
                 }
-
-                db.SaveChanges();
-                _logger.LogInformation("Successfully initialized {Count} default books.", defaultBooks.Count);
             }
             catch (IOException ex)
             {
@@ -127,6 +127,7 @@ namespace BookApp.Services
                 return db.Books
                     .Include(b => b.BookAuthors)
                     .ThenInclude(ba => ba.Author)
+                    .Include(b => b.Ratings)
                     .Where(b => b.IsDefault)
                     .ToList();
             }
@@ -230,7 +231,7 @@ namespace BookApp.Services
             {
                 using var db = CreateDbContext();
                 var existingRating = db.Ratings
-                    .FirstOrDefault(r => r.UserId == rating.UserId && r.BookId == rating.BookId);
+                    .FirstOrDefault(r => r.UserId == rating.UserId && r.BookId == r.BookId);
 
                 if (existingRating == null)
                 {

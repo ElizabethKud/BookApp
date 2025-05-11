@@ -125,18 +125,9 @@ namespace BookApp
                 var history = db.ReadingHistory
                     .FirstOrDefault(rh => rh.UserId == _currentUserId && rh.BookId == book.Id);
 
-                if (history != null)
-                {
-                    _currentPageIndex = history.LastReadPage;
-                }
-                else
-                {
-                    _currentPageIndex = 0;
-                }
+                _currentPageIndex = history?.LastReadPage ?? 0;
 
                 DisplayBookContent(content);
-                PrevPageButton.Visibility = Visibility.Visible;
-                NextPageButton.Visibility = Visibility.Visible;
             }
             catch (Exception ex)
             {
@@ -160,8 +151,6 @@ namespace BookApp
             _currentPageIndex = 0;
             LeftPageDocument.Blocks.Clear();
             RightPageDocument.Blocks.Clear();
-            PrevPageButton.Visibility = Visibility.Collapsed;
-            NextPageButton.Visibility = Visibility.Collapsed;
         }
 
         private void SaveReadingProgress(int pageNumber)
