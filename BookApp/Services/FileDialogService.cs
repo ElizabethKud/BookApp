@@ -8,7 +8,7 @@ namespace BookApp.Services
         {
             var openFileDialog = new OpenFileDialog
             {
-                Filter = "Book Files (*.epub, *.fb2, *.txt)|*.epub;*.fb2;*.txt|All Files (*.*)|*.*"
+                Filter = "Book Files (*.epub, *.fb2, *.pdf)|*.epub;*.fb2;*.pdf|All Files (*.*)|*.*"
             };
             return openFileDialog.ShowDialog() == true ? openFileDialog.FileName : null;
         }
