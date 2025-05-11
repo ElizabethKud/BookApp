@@ -5,18 +5,17 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
 	email VARCHAR(100) NOT NULL UNIQUE,
     registration_date TIMESTAMP NOT NULL DEFAULT NOW(),
-    role VARCHAR(50) CHECK (role IN ('admin', 'user')) NOT NULL DEFAULT 'user'
 );
 
 -- Создание таблицы книг
 CREATE TABLE IF NOT EXISTS books (
     id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
-    author VARCHAR(255),
     publication_year INTEGER CHECK (publication_year > 0),
     pages_count INTEGER,
     language VARCHAR(50),
     file_path VARCHAR(255) NOT NULL, -- Для локальных книг
+	is_default BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- Создание таблицы авторов
@@ -99,4 +98,4 @@ CREATE TABLE IF NOT EXISTS book_genre (
     genre_id INTEGER NOT NULL REFERENCES genres(id) ON DELETE CASCADE
 );
 
-SELECT * from users;
+SELECT * from books;

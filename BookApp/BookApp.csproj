@@ -14,6 +14,7 @@
       <PackageReference Include="MaterialDesignExtensions" Version="4.0.0-a02" />
       <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
       <PackageReference Include="Microsoft.EntityFrameworkCore.Proxies" Version="8.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.4" />
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.0" />
       <PackageReference Include="PdfiumViewer" Version="2.13.0" />
       <PackageReference Include="PdfiumViewer.Core" Version="1.0.4" />

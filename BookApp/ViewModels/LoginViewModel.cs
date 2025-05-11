@@ -80,7 +80,6 @@ namespace BookApp
                 Username = username,
                 Email = email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
-                Role = "user",
                 RegistrationDate = DateTime.UtcNow
             };
 

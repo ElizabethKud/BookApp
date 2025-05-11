@@ -7,6 +7,10 @@
     <Window.Resources>
         <ResourceDictionary>
             <SolidColorBrush x:Key="WindowBackground" Color="#F5F5F5"/>
+            <SolidColorBrush x:Key="PageBackground" Color="White"/>
+            <SolidColorBrush x:Key="PageForeground" Color="Black"/>
+            <FontFamily x:Key="PageFontFamily">Arial</FontFamily>
+            <System:Double x:Key="PageFontSize" xmlns:System="clr-namespace:System;assembly=mscorlib">16</System:Double>
             <Style TargetType="Button">
                 <Setter Property="FontSize" Value="14"/>
                 <Setter Property="Padding" Value="10,5"/>
@@ -18,6 +22,47 @@
                 <Setter Property="Cursor" Value="Hand"/>
                 <Setter Property="HorizontalAlignment" Value="Stretch"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Border"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="5">
+                                <Border.Background>
+                                    <SolidColorBrush Color="#4CAF50"/>
+                                </Border.Background>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal"/>
+                                        <VisualState x:Name="MouseOver">
+                                            <Storyboard>
+                                                <ColorAnimation Storyboard.TargetName="Border"
+                                                                Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                To="#45A049" Duration="0:0:0.2"/>
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <Storyboard>
+                                                <ColorAnimation Storyboard.TargetName="Border"
+                                                                Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                To="#388E3C" Duration="0:0:0.1"/>
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Disabled">
+                                            <Storyboard>
+                                                <ColorAnimation Storyboard.TargetName="Border"
+                                                                Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                To="#A0A0A0" Duration="0:0:0.1"/>
+                                            </Storyboard>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
             <Style TargetType="ComboBox">
                 <Setter Property="FontSize" Value="14"/>
@@ -38,6 +83,12 @@
             <Style TargetType="Slider">
                 <Setter Property="Width" Value="200"/>
                 <Setter Property="Margin" Value="5"/>
+            </Style>
+            <Style TargetType="FlowDocumentPageViewer">
+                <Setter Property="MaxHeight" Value="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=ActualHeight}"/>
+                <Setter Property="MinZoom" Value="100"/>
+                <Setter Property="MaxZoom" Value="100"/>
+                <Setter Property="Zoom" Value="100"/>
             </Style>
         </ResourceDictionary>
     </Window.Resources>
@@ -102,7 +153,6 @@
                         <MenuItem Header="Открыть книгу" Click="OpenBook_Click"/>
                         <MenuItem Header="Закрыть книгу" Click="CloseBook_Click"/>
                         <MenuItem Header="Избранное" Click="Favorites_Click"/>
-                        <MenuItem Header="История чтения" Click="History_Click"/>
                     </ContextMenu>
                 </Button.ContextMenu>
                 <Button.Triggers>
@@ -121,30 +171,35 @@
             <Button x:Name="PrevPageButton" Content="← Пред." Click="PrevPage_Click" Margin="5" Visibility="Collapsed"/>
             <Button x:Name="NextPageButton" Content="След. →" Click="NextPage_Click" Margin="5" Visibility="Collapsed"/>
         </StackPanel>
-        <!-- Основная область для книги -->
+        <!-- Основная область для книги с разворотом -->
         <Grid Margin="10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="20"/> <!-- Промежуток между страницами -->
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Hidden">
-                <TextBlock x:Name="LeftPageTextBlock"
-                           TextWrapping="Wrap"
-                           FontSize="16"
-                           FontFamily="Arial"
-                           Foreground="Black"
-                           Background="White"
-                           Padding="10"/>
-            </ScrollViewer>
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Hidden">
-                <TextBlock x:Name="RightPageTextBlock"
-                           TextWrapping="Wrap"
-                           FontSize="16"
-                           FontFamily="Arial"
-                           Foreground="Black"
-                           Background="White"
-                           Padding="10"/>
-            </ScrollViewer>
+            <FlowDocumentPageViewer x:Name="LeftPageViewer" Grid.Column="0">
+                <FlowDocument x:Name="LeftPageDocument"
+                              Background="{DynamicResource PageBackground}"
+                              Foreground="{DynamicResource PageForeground}"
+                              FontFamily="{DynamicResource PageFontFamily}"
+                              FontSize="{DynamicResource PageFontSize}"
+                              PagePadding="20"
+                              TextAlignment="Justify"
+                              LineHeight="1.5"
+                              IsHyphenationEnabled="True"/>
+            </FlowDocumentPageViewer>
+            <FlowDocumentPageViewer x:Name="RightPageViewer" Grid.Column="2">
+                <FlowDocument x:Name="RightPageDocument"
+                              Background="{DynamicResource PageBackground}"
+                              Foreground="{DynamicResource PageForeground}"
+                              FontFamily="{DynamicResource PageFontFamily}"
+                              FontSize="{DynamicResource PageFontSize}"
+                              PagePadding="20"
+                              TextAlignment="Justify"
+                              LineHeight="1.5"
+                              IsHyphenationEnabled="True"/>
+            </FlowDocumentPageViewer>
         </Grid>
     </DockPanel>
 </Window>

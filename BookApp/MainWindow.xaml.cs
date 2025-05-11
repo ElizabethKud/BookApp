@@ -1,13 +1,16 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using BookApp.Data;
 using BookApp.Models;
 using BookApp.Services;
+using BookApp.Views;
 using Microsoft.EntityFrameworkCore;
 
 namespace BookApp
@@ -20,7 +23,7 @@ namespace BookApp
         private string _currentUser;
         private int _currentUserId;
         private Book _currentBook;
-        private System.Collections.Generic.List<string> _bookPages = new();
+        private List<(bool isChapterStart, Paragraph paragraph)> _bookContent = new();
         private int _currentPageIndex = 0;
 
         public MainWindow(string username)
@@ -64,7 +67,11 @@ namespace BookApp
         {
             var filePath = _fileDialogService.OpenFileDialog();
             if (string.IsNullOrEmpty(filePath)) return;
+            OpenBook(filePath);
+        }
 
+        public void OpenBook(string filePath)
+        {
             try
             {
                 using var db = CreateDbContext();
@@ -82,7 +89,6 @@ namespace BookApp
                     db.Books.Add(book);
                     db.SaveChanges();
 
-                    // Добавляем автора через связь BookAuthor
                     var author = db.Authors.FirstOrDefault(a => a.LastName == "Unknown");
                     if (author == null)
                     {
@@ -110,13 +116,12 @@ namespace BookApp
                 _currentBook = book;
 
                 var content = _parserService.ParseBook(filePath);
-                if (string.IsNullOrEmpty(content))
+                if (!content.Any())
                 {
                     MessageBox.Show("Не удалось прочитать содержимое книги.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
-                // Загрузка истории перед отображением
                 var history = db.ReadingHistory
                     .FirstOrDefault(rh => rh.UserId == _currentUserId && rh.BookId == book.Id);
 
@@ -130,7 +135,6 @@ namespace BookApp
                 }
 
                 DisplayBookContent(content);
-                // Показываем кнопки навигации
                 PrevPageButton.Visibility = Visibility.Visible;
                 NextPageButton.Visibility = Visibility.Visible;
             }
@@ -152,10 +156,10 @@ namespace BookApp
                 SaveReadingProgress(_currentPageIndex);
             }
             _currentBook = null;
-            _bookPages.Clear();
+            _bookContent.Clear();
             _currentPageIndex = 0;
-            LeftPageTextBlock.Text = "";
-            RightPageTextBlock.Text = "";
+            LeftPageDocument.Blocks.Clear();
+            RightPageDocument.Blocks.Clear();
             PrevPageButton.Visibility = Visibility.Collapsed;
             NextPageButton.Visibility = Visibility.Collapsed;
         }
@@ -205,23 +209,19 @@ namespace BookApp
                 {
                     try
                     {
-                        var background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(settings.BackgroundColor));
-                        var foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(settings.FontColor));
-                        LeftPageTextBlock.Background = RightPageTextBlock.Background = background;
-                        LeftPageTextBlock.Foreground = RightPageTextBlock.Foreground = foreground;
+                        Resources["PageBackground"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(settings.BackgroundColor));
+                        Resources["PageForeground"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(settings.FontColor));
+                        Resources["PageFontSize"] = (double)settings.FontSize;
+                        Resources["PageFontFamily"] = new FontFamily(settings.FontFamily ?? "Arial");
                     }
                     catch (FormatException)
                     {
-                        // Устанавливаем значения по умолчанию, если цвет невалиден
-                        LeftPageTextBlock.Background = RightPageTextBlock.Background = new SolidColorBrush(Colors.White);
-                        LeftPageTextBlock.Foreground = RightPageTextBlock.Foreground = new SolidColorBrush(Colors.Black);
+                        Resources["PageBackground"] = new SolidColorBrush(Colors.White);
+                        Resources["PageForeground"] = new SolidColorBrush(Colors.Black);
+                        Resources["PageFontSize"] = 16.0;
+                        Resources["PageFontFamily"] = new FontFamily("Arial");
                     }
-                    double fontSize = settings.FontSize;
-                    var fontFamily = new FontFamily(settings.FontFamily ?? "Arial");
-                    LeftPageTextBlock.FontSize = RightPageTextBlock.FontSize = fontSize;
-                    LeftPageTextBlock.FontFamily = RightPageTextBlock.FontFamily = fontFamily;
 
-                    // Устанавливаем значения в элементах управления
                     BackgroundColorComboBox.SelectedItem = BackgroundColorComboBox.Items
                         .Cast<ComboBoxItem>()
                         .FirstOrDefault(i => i.Tag.ToString() == settings.BackgroundColor);
@@ -235,11 +235,10 @@ namespace BookApp
                 }
                 else
                 {
-                    // Устанавливаем значения по умолчанию, если настроек нет
-                    LeftPageTextBlock.Background = RightPageTextBlock.Background = new SolidColorBrush(Colors.White);
-                    LeftPageTextBlock.Foreground = RightPageTextBlock.Foreground = new SolidColorBrush(Colors.Black);
-                    LeftPageTextBlock.FontSize = RightPageTextBlock.FontSize = 16;
-                    LeftPageTextBlock.FontFamily = RightPageTextBlock.FontFamily = new FontFamily("Arial");
+                    Resources["PageBackground"] = new SolidColorBrush(Colors.White);
+                    Resources["PageForeground"] = new SolidColorBrush(Colors.Black);
+                    Resources["PageFontSize"] = 16.0;
+                    Resources["PageFontFamily"] = new FontFamily("Arial");
 
                     BackgroundColorComboBox.SelectedIndex = 0;
                     FontColorComboBox.SelectedIndex = 0;
@@ -263,10 +262,10 @@ namespace BookApp
 
             try
             {
-                var backgroundColor = ((SolidColorBrush)LeftPageTextBlock.Background).Color.ToString();
-                var fontColor = ((SolidColorBrush)LeftPageTextBlock.Foreground).Color.ToString();
-                var fontSize = (int)LeftPageTextBlock.FontSize;
-                var fontFamily = LeftPageTextBlock.FontFamily.ToString();
+                var backgroundColor = ((SolidColorBrush)Resources["PageBackground"]).Color.ToString();
+                var fontColor = ((SolidColorBrush)Resources["PageForeground"]).Color.ToString();
+                var fontSize = (int)(double)Resources["PageFontSize"];
+                var fontFamily = Resources["PageFontFamily"].ToString();
 
                 var settings = new DisplaySetting
                 {
@@ -289,8 +288,9 @@ namespace BookApp
             if (BackgroundColorComboBox.SelectedItem is ComboBoxItem item)
             {
                 var color = item.Tag.ToString();
-                LeftPageTextBlock.Background = RightPageTextBlock.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
+                Resources["PageBackground"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
                 SaveDisplaySettings();
+                UpdateCurrentPage();
             }
         }
 
@@ -299,83 +299,201 @@ namespace BookApp
             if (FontColorComboBox.SelectedItem is ComboBoxItem item)
             {
                 var color = item.Tag.ToString();
-                LeftPageTextBlock.Foreground = RightPageTextBlock.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
+                Resources["PageForeground"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
                 SaveDisplaySettings();
+                UpdateCurrentPage();
             }
         }
 
         private void FontSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            if (LeftPageTextBlock != null)
-            {
-                LeftPageTextBlock.FontSize = RightPageTextBlock.FontSize = FontSizeSlider.Value;
-                SaveDisplaySettings();
-            }
+            Resources["PageFontSize"] = FontSizeSlider.Value;
+            SaveDisplaySettings();
+            UpdateCurrentPage();
         }
 
         private void FontFamilyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (FontFamilyComboBox.SelectedItem is ComboBoxItem item)
             {
-                var fontFamily = new FontFamily(item.Content.ToString());
-                LeftPageTextBlock.FontFamily = RightPageTextBlock.FontFamily = fontFamily;
+                Resources["PageFontFamily"] = new FontFamily(item.Content.ToString());
                 SaveDisplaySettings();
+                UpdateCurrentPage();
             }
         }
 
-        private void DisplayBookContent(string fullText)
+        private void DisplayBookContent(List<(bool isChapterStart, Paragraph paragraph)> content)
         {
-            int charsPerPage = 2000;
-            _bookPages = Enumerable.Range(0, (fullText.Length + charsPerPage - 1) / charsPerPage)
-                .Select(i => fullText.Substring(i * charsPerPage, Math.Min(charsPerPage, fullText.Length - i * charsPerPage)))
-                .ToList();
-
+            _bookContent = content ?? new List<(bool isChapterStart, Paragraph paragraph)>();
             _currentPageIndex = 0;
-            ShowCurrentPages();
+            ShowCurrentPage();
         }
 
-        private void ShowCurrentPages()
+        private void ShowCurrentPage()
         {
-            LeftPageTextBlock.Text = _bookPages.ElementAtOrDefault(_currentPageIndex) ?? "";
-            RightPageTextBlock.Text = _bookPages.ElementAtOrDefault(_currentPageIndex + 1) ?? "";
+            LeftPageDocument.Blocks.Clear();
+            RightPageDocument.Blocks.Clear();
+
+            if (_bookContent == null || !_bookContent.Any())
+            {
+                return;
+            }
+
+            double pageHeight = ActualHeight - 100;
+            double fontSize = (double)Resources["PageFontSize"];
+            double lineHeight = fontSize * 1.5;
+            int maxLinesPerPage = (int)(pageHeight / lineHeight);
+
+            int leftPageStartIndex = _currentPageIndex * 2;
+            int rightPageStartIndex = leftPageStartIndex + 1;
+
+            if (leftPageStartIndex < CalculateTotalPages())
+            {
+                int currentIndex = FindPageStartIndex(leftPageStartIndex);
+                int linesAdded = 0;
+                while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
+                {
+                    var (isChapterStart, paragraph) = _bookContent[currentIndex];
+                    if (isChapterStart && linesAdded > 0)
+                    {
+                        break;
+                    }
+                    LeftPageDocument.Blocks.Add(paragraph);
+                    linesAdded += EstimateLineCount(paragraph, fontSize);
+                    currentIndex++;
+                }
+            }
+
+            if (rightPageStartIndex < CalculateTotalPages())
+            {
+                int currentIndex = FindPageStartIndex(rightPageStartIndex);
+                int linesAdded = 0;
+                while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
+                {
+                    var (isChapterStart, paragraph) = _bookContent[currentIndex];
+                    if (isChapterStart && linesAdded > 0)
+                    {
+                        break;
+                    }
+                    RightPageDocument.Blocks.Add(paragraph);
+                    linesAdded += EstimateLineCount(paragraph, fontSize);
+                    currentIndex++;
+                }
+            }
+        }
+
+        private int FindPageStartIndex(int pageIndex)
+        {
+            int totalPages = 0;
+            int currentIndex = 0;
+            double pageHeight = ActualHeight - 100;
+            double fontSize = (double)Resources["PageFontSize"];
+            double lineHeight = fontSize * 1.5;
+            int maxLinesPerPage = (int)(pageHeight / lineHeight);
+
+            while (currentIndex < _bookContent.Count && totalPages < pageIndex)
+            {
+                int linesAdded = 0;
+                while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
+                {
+                    var (isChapterStart, paragraph) = _bookContent[currentIndex];
+                    if (isChapterStart && linesAdded > 0)
+                    {
+                        break;
+                    }
+                    linesAdded += EstimateLineCount(paragraph, fontSize);
+                    currentIndex++;
+                }
+                totalPages++;
+            }
+
+            return currentIndex;
+        }
+
+        private int CalculateTotalPages()
+        {
+            if (_bookContent == null || !_bookContent.Any())
+            {
+                return 0;
+            }
+
+            double pageHeight = ActualHeight - 100;
+            double fontSize = (double)Resources["PageFontSize"];
+            double lineHeight = fontSize * 1.5;
+            int maxLinesPerPage = (int)(pageHeight / lineHeight);
+
+            int totalPages = 0;
+            int currentIndex = 0;
+            while (currentIndex < _bookContent.Count)
+            {
+                int linesAdded = 0;
+                while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
+                {
+                    var (isChapterStart, paragraph) = _bookContent[currentIndex];
+                    if (isChapterStart && linesAdded > 0)
+                    {
+                        break;
+                    }
+                    linesAdded += EstimateLineCount(paragraph, fontSize);
+                    currentIndex++;
+                }
+                totalPages++;
+            }
+
+            return totalPages;
+        }
+
+        private int EstimateLineCount(Paragraph paragraph, double fontSize)
+        {
+            var run = paragraph.Inlines.OfType<Run>().FirstOrDefault();
+            if (run == null || string.IsNullOrEmpty(run.Text))
+            {
+                return 1;
+            }
+            string text = run.Text;
+            int avgCharsPerLine = (int)(ActualWidth / (fontSize * 0.6));
+            int lines = (int)Math.Ceiling((double)text.Length / avgCharsPerLine);
+            return Math.Max(lines, 1);
         }
 
         private void PrevPage_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentPageIndex >= 2)
+            if (_currentPageIndex > 0)
             {
-                _currentPageIndex -= 2;
-                ShowCurrentPages();
+                _currentPageIndex--;
+                ShowCurrentPage();
                 SaveReadingProgress(_currentPageIndex);
             }
         }
 
         private void NextPage_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentPageIndex + 2 < _bookPages.Count)
+            if ((_currentPageIndex + 1) * 2 < CalculateTotalPages())
             {
-                _currentPageIndex += 2;
-                ShowCurrentPages();
+                _currentPageIndex++;
+                ShowCurrentPage();
                 SaveReadingProgress(_currentPageIndex);
+            }
+        }
+
+        private void UpdateCurrentPage()
+        {
+            if (_bookContent != null && _bookContent.Any())
+            {
+                ShowCurrentPage();
             }
         }
 
         private void DefaultBooks_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("Загрузка базовых книг...");
-            // TODO: Добавить отображение списка базовых книг
+            var defaultBooksWindow = new DefaultBooksWindow(_currentUserId, this);
+            defaultBooksWindow.ShowDialog();
         }
 
         private void Favorites_Click(object sender, RoutedEventArgs e)
         {
             MessageBox.Show("Избранные книги...");
-            // TODO: Добавить отображение избранных книг
-        }
-
-        private void History_Click(object sender, RoutedEventArgs e)
-        {
-            MessageBox.Show("История чтения...");
-            // TODO: Добавить отображение истории чтения
+            // TODO: Реализовать отображение избранных книг
         }
 
         private void SaveNickname_Click(object sender, RoutedEventArgs e)

@@ -1,19 +1,23 @@
-﻿namespace BookApp.Models;
+﻿using System.Collections.Generic;
 
-public class Book
+namespace BookApp.Models
 {
-    public int Id { get; set; }
-    public string Title { get; set; }
-    public int? PublicationYear { get; set; }
-    public int? PagesCount { get; set; }
-    public string Language { get; set; }
-    public string FilePath { get; set; }
-
-    // Навигационные свойства
-    public virtual ICollection<Rating> Ratings { get; set; } = new List<Rating>();
-    public virtual ICollection<Bookmark> Bookmarks { get; set; } = new List<Bookmark>();
-    public virtual ICollection<FavoriteBook> FavoriteBooks { get; set; } = new List<FavoriteBook>();
-    public virtual ICollection<ReadingHistory> ReadingHistory { get; set; } = new List<ReadingHistory>();
-    public virtual ICollection<BookAuthor> BookAuthors { get; set; } = new List<BookAuthor>();
-    public virtual ICollection<BookGenre> BookGenres { get; set; } = new List<BookGenre>();
+    public class Book
+    {
+        public int Id { get; set; }
+        public string Title { get; set; }
+        public int? PublicationYear { get; set; }
+        public int? PagesCount { get; set; }
+        public string Language { get; set; }
+        public string FilePath { get; set; }
+        public bool IsDefault { get; set; } 
+        
+        // Навигационные свойства
+        public virtual ICollection<Rating> Ratings { get; set; } = new List<Rating>();
+        public virtual ICollection<Bookmark> Bookmarks { get; set; } = new List<Bookmark>();
+        public virtual ICollection<FavoriteBook> FavoriteBooks { get; set; } = new List<FavoriteBook>();
+        public virtual ICollection<ReadingHistory> ReadingHistory { get; set; } = new List<ReadingHistory>();
+        public virtual ICollection<BookAuthor> BookAuthors { get; set; } = new List<BookAuthor>();
+        public virtual ICollection<BookGenre> BookGenres { get; set; } = new List<BookGenre>();
+    }
 }
