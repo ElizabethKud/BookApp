@@ -1,7 +1,9 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using BookApp.Data;
 using BookApp.Models;
@@ -18,7 +20,7 @@ namespace BookApp
         private string _currentUser;
         private int _currentUserId;
         private Book _currentBook;
-        private List<string> _bookPages = new();
+        private System.Collections.Generic.List<string> _bookPages = new();
         private int _currentPageIndex = 0;
 
         public MainWindow(string username)
@@ -34,32 +36,28 @@ namespace BookApp
             // Инициализация базовых книг
             _dbService.InitializeDefaultBooks();
 
-            // Заполнение комбобоксов для оформления
-            BackgroundColorComboBox.Items.Add(new ComboBoxItem { Content = "Белый", Tag = "#FFFFFF" });
-            BackgroundColorComboBox.Items.Add(new ComboBoxItem { Content = "Черный", Tag = "#000000" });
-            BackgroundColorComboBox.Items.Add(new ComboBoxItem { Content = "Серый", Tag = "#D3D3D3" });
-            BackgroundColorComboBox.Items.Add(new ComboBoxItem { Content = "Сепия", Tag = "#F4ECD8" });
-            BackgroundColorComboBox.Items.Add(new ComboBoxItem { Content = "Темно-синий", Tag = "#1E3A5F" });
-
-            FontColorComboBox.Items.Add(new ComboBoxItem { Content = "Черный", Tag = "#000000" });
-            FontColorComboBox.Items.Add(new ComboBoxItem { Content = "Белый", Tag = "#FFFFFF" });
-            FontColorComboBox.Items.Add(new ComboBoxItem { Content = "Серый", Tag = "#666666" });
-            FontColorComboBox.Items.Add(new ComboBoxItem { Content = "Коричневый", Tag = "#5C4033" });
-
-            FontFamilyComboBox.Items.Add(new ComboBoxItem { Content = "Arial" });
-            FontFamilyComboBox.Items.Add(new ComboBoxItem { Content = "Times New Roman" });
-            FontFamilyComboBox.Items.Add(new ComboBoxItem { Content = "Segoe UI" });
-            FontFamilyComboBox.Items.Add(new ComboBoxItem { Content = "Calibri" });
-            FontFamilyComboBox.Items.Add(new ComboBoxItem { Content = "Georgia" });
-            FontFamilyComboBox.Items.Add(new ComboBoxItem { Content = "Verdana" });
-
-            BackgroundColorComboBox.SelectedIndex = 0;
-            FontColorComboBox.SelectedIndex = 0;
-            FontFamilyComboBox.SelectedIndex = 0;
-            FontSizeSlider.Value = 16;
-
             // Загрузка настроек пользователя
             LoadUserSettings();
+        }
+
+        private void Window_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.A)
+            {
+                PrevPage_Click(sender, e);
+            }
+            else if (e.Key == Key.D)
+            {
+                NextPage_Click(sender, e);
+            }
+            else if (e.Key == Key.O && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                OpenBook_Click(sender, e);
+            }
+            else if (e.Key == Key.Escape)
+            {
+                Close();
+            }
         }
 
         private void OpenBook_Click(object sender, RoutedEventArgs e)
@@ -131,19 +129,10 @@ namespace BookApp
                     _currentPageIndex = 0;
                 }
 
-                // Только после установки _currentPageIndex
                 DisplayBookContent(content);
-
-                var tabControl = (TabControl)FindName("TabControl") ?? (TabControl)((Grid)Content).Children[0];
-                var bookTab = tabControl.Items.OfType<TabItem>().FirstOrDefault(t => t.Header.ToString() == "Книга");
-                if (bookTab != null)
-                {
-                    tabControl.SelectedItem = bookTab;
-                }
-                else
-                {
-                    MessageBox.Show("Вкладка 'Книга' не найдена.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+                // Показываем кнопки навигации
+                PrevPageButton.Visibility = Visibility.Visible;
+                NextPageButton.Visibility = Visibility.Visible;
             }
             catch (Exception ex)
             {
@@ -151,15 +140,24 @@ namespace BookApp
             }
         }
 
-
-        private void BookScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
+        private void CloseBook_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentBook == null) return;
+            CloseBook();
+        }
 
-            // Пример: считаем страницу на основе вертикального смещения
-            var scrollViewer = (ScrollViewer)sender;
-            int estimatedPage = (int)(scrollViewer.VerticalOffset / 100) + 1; // Примерная логика
-            SaveReadingProgress(estimatedPage);
+        private void CloseBook()
+        {
+            if (_currentBook != null)
+            {
+                SaveReadingProgress(_currentPageIndex);
+            }
+            _currentBook = null;
+            _bookPages.Clear();
+            _currentPageIndex = 0;
+            LeftPageTextBlock.Text = "";
+            RightPageTextBlock.Text = "";
+            PrevPageButton.Visibility = Visibility.Collapsed;
+            NextPageButton.Visibility = Visibility.Collapsed;
         }
 
         private void SaveReadingProgress(int pageNumber)
@@ -191,7 +189,6 @@ namespace BookApp
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
-            // Сохраняем последнюю страницу (примерная страница, доработать для точности)
             if (_currentBook != null)
             {
                 SaveReadingProgress(_currentPageIndex);
@@ -215,6 +212,7 @@ namespace BookApp
                     }
                     catch (FormatException)
                     {
+                        // Устанавливаем значения по умолчанию, если цвет невалиден
                         LeftPageTextBlock.Background = RightPageTextBlock.Background = new SolidColorBrush(Colors.White);
                         LeftPageTextBlock.Foreground = RightPageTextBlock.Foreground = new SolidColorBrush(Colors.Black);
                     }
@@ -223,16 +221,30 @@ namespace BookApp
                     LeftPageTextBlock.FontSize = RightPageTextBlock.FontSize = fontSize;
                     LeftPageTextBlock.FontFamily = RightPageTextBlock.FontFamily = fontFamily;
 
+                    // Устанавливаем значения в элементах управления
                     BackgroundColorComboBox.SelectedItem = BackgroundColorComboBox.Items
                         .Cast<ComboBoxItem>()
-                        .FirstOrDefault(i => i.Tag.ToString() == settings.BackgroundColor) ?? BackgroundColorComboBox.Items[0];
+                        .FirstOrDefault(i => i.Tag.ToString() == settings.BackgroundColor);
                     FontColorComboBox.SelectedItem = FontColorComboBox.Items
                         .Cast<ComboBoxItem>()
-                        .FirstOrDefault(i => i.Tag.ToString() == settings.FontColor) ?? FontColorComboBox.Items[0];
+                        .FirstOrDefault(i => i.Tag.ToString() == settings.FontColor);
                     FontSizeSlider.Value = settings.FontSize;
                     FontFamilyComboBox.SelectedItem = FontFamilyComboBox.Items
                         .Cast<ComboBoxItem>()
-                        .FirstOrDefault(i => i.Content.ToString() == settings.FontFamily) ?? FontFamilyComboBox.Items[0];
+                        .FirstOrDefault(i => i.Content.ToString() == settings.FontFamily);
+                }
+                else
+                {
+                    // Устанавливаем значения по умолчанию, если настроек нет
+                    LeftPageTextBlock.Background = RightPageTextBlock.Background = new SolidColorBrush(Colors.White);
+                    LeftPageTextBlock.Foreground = RightPageTextBlock.Foreground = new SolidColorBrush(Colors.Black);
+                    LeftPageTextBlock.FontSize = RightPageTextBlock.FontSize = 16;
+                    LeftPageTextBlock.FontFamily = RightPageTextBlock.FontFamily = new FontFamily("Arial");
+
+                    BackgroundColorComboBox.SelectedIndex = 0;
+                    FontColorComboBox.SelectedIndex = 0;
+                    FontSizeSlider.Value = 16;
+                    FontFamilyComboBox.SelectedIndex = 0;
                 }
             }
             catch (Exception ex)
@@ -256,17 +268,6 @@ namespace BookApp
                 var fontSize = (int)LeftPageTextBlock.FontSize;
                 var fontFamily = LeftPageTextBlock.FontFamily.ToString();
 
-                if (!IsValidHexColor(backgroundColor) || !IsValidHexColor(fontColor))
-                {
-                    MessageBox.Show("Недопустимый формат цвета.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-                if (fontSize < 8 || fontSize > 30)
-                {
-                    MessageBox.Show("Размер шрифта должен быть от 8 до 30.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-
                 var settings = new DisplaySetting
                 {
                     UserId = _currentUserId,
@@ -281,11 +282,6 @@ namespace BookApp
             {
                 MessageBox.Show($"Ошибка сохранения настроек: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-        }
-
-        private bool IsValidHexColor(string color)
-        {
-            return System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$|^#[0-9A-Fa-f]{8}$");
         }
 
         private void BackgroundColorComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -310,7 +306,7 @@ namespace BookApp
 
         private void FontSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            if (LeftPageTextBlock.FontSize != null)
+            if (LeftPageTextBlock != null)
             {
                 LeftPageTextBlock.FontSize = RightPageTextBlock.FontSize = FontSizeSlider.Value;
                 SaveDisplaySettings();
@@ -323,14 +319,13 @@ namespace BookApp
             {
                 var fontFamily = new FontFamily(item.Content.ToString());
                 LeftPageTextBlock.FontFamily = RightPageTextBlock.FontFamily = fontFamily;
-
                 SaveDisplaySettings();
             }
         }
-        
+
         private void DisplayBookContent(string fullText)
         {
-            int charsPerPage = 2000; // Подбирай под размер экрана
+            int charsPerPage = 2000;
             _bookPages = Enumerable.Range(0, (fullText.Length + charsPerPage - 1) / charsPerPage)
                 .Select(i => fullText.Substring(i * charsPerPage, Math.Min(charsPerPage, fullText.Length - i * charsPerPage)))
                 .ToList();
@@ -338,19 +333,20 @@ namespace BookApp
             _currentPageIndex = 0;
             ShowCurrentPages();
         }
-        
+
         private void ShowCurrentPages()
         {
             LeftPageTextBlock.Text = _bookPages.ElementAtOrDefault(_currentPageIndex) ?? "";
             RightPageTextBlock.Text = _bookPages.ElementAtOrDefault(_currentPageIndex + 1) ?? "";
         }
-        
+
         private void PrevPage_Click(object sender, RoutedEventArgs e)
         {
             if (_currentPageIndex >= 2)
             {
                 _currentPageIndex -= 2;
                 ShowCurrentPages();
+                SaveReadingProgress(_currentPageIndex);
             }
         }
 
@@ -360,6 +356,7 @@ namespace BookApp
             {
                 _currentPageIndex += 2;
                 ShowCurrentPages();
+                SaveReadingProgress(_currentPageIndex);
             }
         }
 
