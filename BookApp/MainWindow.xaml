@@ -82,11 +82,10 @@
                 <Setter Property="Width" Value="200"/>
                 <Setter Property="Margin" Value="5"/>
             </Style>
-            <Style TargetType="FlowDocumentPageViewer">
-                <Setter Property="MaxHeight" Value="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=ActualHeight}"/>
-                <Setter Property="MinZoom" Value="100"/>
-                <Setter Property="MaxZoom" Value="100"/>
-                <Setter Property="Zoom" Value="100"/>
+            <Style TargetType="FlowDocumentScrollViewer">
+                <Setter Property="VerticalScrollBarVisibility" Value="Hidden"/>
+                <Setter Property="HorizontalScrollBarVisibility" Value="Hidden"/>
+                <Setter Property="IsEnabled" Value="False"/>
             </Style>
         </ResourceDictionary>
     </Window.Resources>
@@ -212,13 +211,14 @@
             </Button>
         </StackPanel>
         <!-- Основная область для книги -->
-        <Grid Margin="10">
+        <Grid Margin="20">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="20"/> <!-- Промежуток между страницами -->
+                <ColumnDefinition Width="20"/> <!-- Промежуток между колонками -->
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <FlowDocumentPageViewer x:Name="LeftPageViewer" Grid.Column="0">
+            <!-- Левая колонка -->
+            <FlowDocumentScrollViewer Grid.Column="0" x:Name="LeftPageViewer">
                 <FlowDocument x:Name="LeftPageDocument"
                               Background="{DynamicResource PageBackground}"
                               Foreground="{DynamicResource PageForeground}"
@@ -228,8 +228,11 @@
                               TextAlignment="Justify"
                               LineHeight="1.5"
                               IsHyphenationEnabled="True"/>
-            </FlowDocumentPageViewer>
-            <FlowDocumentPageViewer x:Name="RightPageViewer" Grid.Column="2">
+            </FlowDocumentScrollViewer>
+            <!-- Разделитель -->
+            <Border Grid.Column="1" Background="PeachPuff"/>
+            <!-- Правая колонка -->
+            <FlowDocumentScrollViewer Grid.Column="2" x:Name="RightPageViewer">
                 <FlowDocument x:Name="RightPageDocument"
                               Background="{DynamicResource PageBackground}"
                               Foreground="{DynamicResource PageForeground}"
@@ -239,7 +242,7 @@
                               TextAlignment="Justify"
                               LineHeight="1.5"
                               IsHyphenationEnabled="True"/>
-            </FlowDocumentPageViewer>
+            </FlowDocumentScrollViewer>
         </Grid>
     </DockPanel>
 </Window>

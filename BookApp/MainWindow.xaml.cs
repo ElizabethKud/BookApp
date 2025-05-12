@@ -23,7 +23,7 @@ namespace BookApp
         private string _currentUser;
         private int _currentUserId;
         private Book _currentBook;
-        private List<(bool isChapterStart, Paragraph paragraph)> _bookContent = new();
+        private List<(bool isChapterStart, bool isTitle, bool isToc, Paragraph paragraph)> _bookContent = new();
         private int _currentPageIndex = 0;
 
         public MainWindow(string username)
@@ -41,6 +41,9 @@ namespace BookApp
 
             // Загрузка настроек пользователя
             LoadUserSettings();
+
+            // Обновление при изменении размера окна
+            SizeChanged += (s, e) => UpdateCurrentPage();
         }
 
         private void Window_KeyDown(object sender, KeyEventArgs e)
@@ -311,9 +314,9 @@ namespace BookApp
             }
         }
 
-        private void DisplayBookContent(List<(bool isChapterStart, Paragraph paragraph)> content)
+        private void DisplayBookContent(List<(bool isChapterStart, bool isTitle, bool isToc, Paragraph paragraph)> content)
         {
-            _bookContent = content ?? new List<(bool isChapterStart, Paragraph paragraph)>();
+            _bookContent = content ?? new List<(bool isChapterStart, bool isTitle, bool isToc, Paragraph paragraph)>();
             _currentPageIndex = 0;
             ShowCurrentPage();
         }
@@ -325,77 +328,153 @@ namespace BookApp
 
             if (_bookContent == null || !_bookContent.Any())
             {
+                System.Diagnostics.Debug.WriteLine("ShowCurrentPage: _bookContent пуст");
                 return;
             }
 
-            double pageHeight = ActualHeight - 100;
-            double fontSize = (double)Resources["PageFontSize"];
-            double lineHeight = fontSize * 1.5;
-            int maxLinesPerPage = (int)(pageHeight / lineHeight);
-
-            int leftPageStartIndex = _currentPageIndex * 2;
-            int rightPageStartIndex = leftPageStartIndex + 1;
-
-            if (leftPageStartIndex < CalculateTotalPages())
+            // Применяем текущие настройки к параграфам
+            foreach (var (_, _, _, paragraph) in _bookContent)
             {
-                int currentIndex = FindPageStartIndex(leftPageStartIndex);
-                int linesAdded = 0;
-                while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
-                {
-                    var (isChapterStart, paragraph) = _bookContent[currentIndex];
-                    if (isChapterStart && linesAdded > 0)
-                    {
-                        break;
-                    }
-                    LeftPageDocument.Blocks.Add(paragraph);
-                    linesAdded += EstimateLineCount(paragraph, fontSize);
-                    currentIndex++;
-                }
+                paragraph.FontFamily = (FontFamily)Resources["PageFontFamily"];
+                paragraph.Foreground = (SolidColorBrush)Resources["PageForeground"];
             }
 
-            if (rightPageStartIndex < CalculateTotalPages())
+            double pageHeight = LeftPageViewer.ActualHeight - 40; // Учитываем PagePadding
+            double fontSize = (double)Resources["PageFontSize"];
+            double lineHeight = fontSize * 1.5;
+            int maxLinesPerColumn = (int)(pageHeight / lineHeight);
+
+            int startIndex = FindPageStartIndex(_currentPageIndex);
+            int currentIndex = startIndex;
+            int linesAdded = 0;
+            bool isLeftColumn = true;
+
+            System.Diagnostics.Debug.WriteLine($"ShowCurrentPage: Начало страницы {_currentPageIndex}, startIndex={startIndex}");
+
+            while (currentIndex < _bookContent.Count)
             {
-                int currentIndex = FindPageStartIndex(rightPageStartIndex);
-                int linesAdded = 0;
-                while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
+                var (isChapterStart, isTitle, isToc, paragraph) = _bookContent[currentIndex];
+                var clonedParagraph = CloneParagraph(paragraph);
+
+                // Если это заголовок главы (не в оглавлении), начинаем новую страницу
+                if (isChapterStart && !isToc && currentIndex > startIndex && linesAdded > 0)
                 {
-                    var (isChapterStart, paragraph) = _bookContent[currentIndex];
-                    if (isChapterStart && linesAdded > 0)
+                    System.Diagnostics.Debug.WriteLine("Прерываем страницу для новой главы");
+                    break; // Новая страница для главы
+                }
+
+                int lineCount = EstimateLineCount(clonedParagraph, fontSize);
+
+                if (isLeftColumn)
+                {
+                    if (linesAdded + lineCount <= maxLinesPerColumn || isTitle || isToc)
                     {
-                        break;
+                        LeftPageDocument.Blocks.Add(clonedParagraph);
+                        linesAdded += lineCount;
+                        currentIndex++;
+                        System.Diagnostics.Debug.WriteLine($"Добавлен параграф в левую колонку: {clonedParagraph.Inlines.OfType<Run>().FirstOrDefault()?.Text.Substring(0, Math.Min(50, clonedParagraph.Inlines.OfType<Run>().FirstOrDefault()?.Text.Length ?? 0))}... (lines={lineCount})");
                     }
-                    RightPageDocument.Blocks.Add(paragraph);
-                    linesAdded += EstimateLineCount(paragraph, fontSize);
-                    currentIndex++;
+                    else
+                    {
+                        isLeftColumn = false; // Переходим к правой колонке
+                        System.Diagnostics.Debug.WriteLine("Переход к правой колонке");
+                    }
+                }
+                else
+                {
+                    if (linesAdded + lineCount <= maxLinesPerColumn && !isTitle && !isToc)
+                    {
+                        RightPageDocument.Blocks.Add(clonedParagraph);
+                        linesAdded += lineCount;
+                        currentIndex++;
+                        System.Diagnostics.Debug.WriteLine($"Добавлен параграф в правую колонку: {clonedParagraph.Inlines.OfType<Run>().FirstOrDefault()?.Text.Substring(0, Math.Min(50, clonedParagraph.Inlines.OfType<Run>().FirstOrDefault()?.Text.Length ?? 0))}... (lines={lineCount})");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("Страница заполнена, прерываем");
+                        break; // Страница заполнена
+                    }
+                }
+
+                // Название и оглавление не перетекают в правую колонку
+                if ((isTitle || isToc) && linesAdded > 0)
+                {
+                    isLeftColumn = false;
+                    System.Diagnostics.Debug.WriteLine("Прерываем для названия или оглавления");
+                    break;
                 }
             }
         }
 
         private int FindPageStartIndex(int pageIndex)
         {
-            int totalPages = 0;
-            int currentIndex = 0;
-            double pageHeight = ActualHeight - 100;
+            if (pageIndex == 0) return 0;
+
+            double pageHeight = LeftPageViewer.ActualHeight - 40;
             double fontSize = (double)Resources["PageFontSize"];
             double lineHeight = fontSize * 1.5;
-            int maxLinesPerPage = (int)(pageHeight / lineHeight);
+            int maxLinesPerColumn = (int)(pageHeight / lineHeight);
 
-            while (currentIndex < _bookContent.Count && totalPages < pageIndex)
+            int currentIndex = 0;
+            int currentPage = 0;
+
+            System.Diagnostics.Debug.WriteLine($"FindPageStartIndex: Ищем индекс для страницы {pageIndex}");
+
+            while (currentIndex < _bookContent.Count && currentPage < pageIndex)
             {
                 int linesAdded = 0;
-                while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
+                bool isLeftColumn = true;
+
+                while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerColumn)
                 {
-                    var (isChapterStart, paragraph) = _bookContent[currentIndex];
-                    if (isChapterStart && linesAdded > 0)
+                    var (isChapterStart, isTitle, isToc, paragraph) = _bookContent[currentIndex];
+                    int lineCount = EstimateLineCount(paragraph, fontSize);
+
+                    if (isChapterStart && !isToc && currentIndex > 0 && linesAdded > 0)
                     {
+                        System.Diagnostics.Debug.WriteLine($"Прерываем страницу {currentPage} для новой главы на индексе {currentIndex}");
+                        break; // Новая страница для главы
+                    }
+
+                    if (isLeftColumn)
+                    {
+                        linesAdded += lineCount;
+                        currentIndex++;
+                        System.Diagnostics.Debug.WriteLine($"Левая колонка: добавлено {lineCount} строк, индекс={currentIndex}");
+                    }
+                    else
+                    {
+                        if (linesAdded + lineCount <= maxLinesPerColumn && !isTitle && !isToc)
+                        {
+                            linesAdded += lineCount;
+                            currentIndex++;
+                            System.Diagnostics.Debug.WriteLine($"Правая колонка: добавлено {lineCount} строк, индекс={currentIndex}");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Правая колонка заполнена или isTitle/isToc, прерываем");
+                            break;
+                        }
+                    }
+
+                    if (linesAdded >= maxLinesPerColumn && isLeftColumn && !isTitle && !isToc)
+                    {
+                        isLeftColumn = false;
+                        linesAdded = 0; // Сбрасываем для правой колонки
+                        System.Diagnostics.Debug.WriteLine("Сброс строк для правой колонки");
+                    }
+
+                    if ((isTitle || isToc) && linesAdded > 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Прерываем для названия или оглавления");
                         break;
                     }
-                    linesAdded += EstimateLineCount(paragraph, fontSize);
-                    currentIndex++;
                 }
-                totalPages++;
+                currentPage++;
+                System.Diagnostics.Debug.WriteLine($"Завершена страница {currentPage}, текущий индекс={currentIndex}");
             }
 
+            System.Diagnostics.Debug.WriteLine($"Найден стартовый индекс {currentIndex} для страницы {pageIndex}");
             return currentIndex;
         }
 
@@ -406,29 +485,66 @@ namespace BookApp
                 return 0;
             }
 
-            double pageHeight = ActualHeight - 100;
+            double pageHeight = LeftPageViewer.ActualHeight - 40;
             double fontSize = (double)Resources["PageFontSize"];
             double lineHeight = fontSize * 1.5;
-            int maxLinesPerPage = (int)(pageHeight / lineHeight);
+            int maxLinesPerColumn = (int)(pageHeight / lineHeight);
 
             int totalPages = 0;
             int currentIndex = 0;
+
+            System.Diagnostics.Debug.WriteLine("CalculateTotalPages: Подсчёт страниц");
+
             while (currentIndex < _bookContent.Count)
             {
                 int linesAdded = 0;
-                while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
+                bool isLeftColumn = true;
+
+                while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerColumn)
                 {
-                    var (isChapterStart, paragraph) = _bookContent[currentIndex];
-                    if (isChapterStart && linesAdded > 0)
+                    var (isChapterStart, isTitle, isToc, paragraph) = _bookContent[currentIndex];
+                    int lineCount = EstimateLineCount(paragraph, fontSize);
+
+                    if (isChapterStart && !isToc && currentIndex > 0 && linesAdded > 0)
                     {
-                        break;
+                        System.Diagnostics.Debug.WriteLine($"Прерываем страницу {totalPages} для новой главы");
+                        break; // Новая страница для главы
                     }
-                    linesAdded += EstimateLineCount(paragraph, fontSize);
-                    currentIndex++;
+
+                    if (isLeftColumn)
+                    {
+                        linesAdded += lineCount;
+                        currentIndex++;
+                    }
+                    else
+                    {
+                        if (linesAdded + lineCount <= maxLinesPerColumn && !isTitle && !isToc)
+                        {
+                            linesAdded += lineCount;
+                            currentIndex++;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+
+                    if (linesAdded >= maxLinesPerColumn && isLeftColumn && !isTitle && !isToc)
+                    {
+                        isLeftColumn = false;
+                        linesAdded = 0; // Сбрасываем для правой колонки
+                    }
+
+                    if ((isTitle || isToc) && linesAdded > 0)
+                    {
+                        break; // Название и оглавление не перетекают
+                    }
                 }
                 totalPages++;
+                System.Diagnostics.Debug.WriteLine($"Страница {totalPages} завершена, индекс={currentIndex}");
             }
 
+            System.Diagnostics.Debug.WriteLine($"Всего страниц: {totalPages}");
             return totalPages;
         }
 
@@ -437,12 +553,43 @@ namespace BookApp
             var run = paragraph.Inlines.OfType<Run>().FirstOrDefault();
             if (run == null || string.IsNullOrEmpty(run.Text))
             {
+                System.Diagnostics.Debug.WriteLine("EstimateLineCount: Параграф пуст, возвращаем 1 строку");
                 return 1;
             }
+
             string text = run.Text;
-            int avgCharsPerLine = (int)(ActualWidth / (fontSize * 0.6));
+            double columnWidth = LeftPageViewer.ActualWidth - 40; // Учитываем PagePadding
+            double avgCharWidth = fontSize * 0.5; // Уменьшили ширину символа для точности
+            int avgCharsPerLine = (int)(columnWidth / avgCharWidth);
             int lines = (int)Math.Ceiling((double)text.Length / avgCharsPerLine);
-            return Math.Max(lines, 1);
+            int estimatedLines = Math.Max(lines, 1);
+            System.Diagnostics.Debug.WriteLine($"EstimateLineCount: Текст='{text.Substring(0, Math.Min(50, text.Length))}...', строк={estimatedLines}, символов={text.Length}, avgCharsPerLine={avgCharsPerLine}");
+            return estimatedLines;
+        }
+
+        private Paragraph CloneParagraph(Paragraph original)
+        {
+            var newParagraph = new Paragraph();
+            foreach (var inline in original.Inlines)
+            {
+                if (inline is Run run)
+                {
+                    newParagraph.Inlines.Add(new Run(run.Text)
+                    {
+                        FontWeight = run.FontWeight,
+                        FontSize = run.FontSize,
+                        FontFamily = run.FontFamily,
+                        Foreground = run.Foreground
+                    });
+                }
+            }
+            newParagraph.Margin = original.Margin;
+            newParagraph.FontWeight = original.FontWeight;
+            newParagraph.FontSize = original.FontSize;
+            newParagraph.FontFamily = original.FontFamily;
+            newParagraph.Foreground = original.Foreground;
+            newParagraph.TextAlignment = original.TextAlignment;
+            return newParagraph;
         }
 
         private void PrevPage_Click(object sender, RoutedEventArgs e)
@@ -457,7 +604,7 @@ namespace BookApp
 
         private void NextPage_Click(object sender, RoutedEventArgs e)
         {
-            if ((_currentPageIndex + 1) * 2 < CalculateTotalPages())
+            if (_currentPageIndex < CalculateTotalPages() - 1)
             {
                 _currentPageIndex++;
                 ShowCurrentPage();
