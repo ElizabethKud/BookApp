@@ -15,7 +15,7 @@ namespace BookApp.Services
 {
     public class BookParserService
     {
-        public List<(bool isChapterStart, bool isTitle, bool isToc, Paragraph paragraph)> ParseBook(string filePath)
+        public List<(bool isChapterStart, bool isTitle, bool isToc, bool isPageBreak, Paragraph paragraph)> ParseBook(string filePath)
         {
             try
             {
@@ -49,9 +49,10 @@ namespace BookApp.Services
             {
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
-                var text = doc.DocumentNode.InnerText;
+                var textNodes = doc.DocumentNode.SelectNodes("//text()[normalize-space() and not(parent::script or parent::style)]") ?? new HtmlNodeCollection(null);
+                var text = string.Join(" ", textNodes.Select(n => n.InnerText.Trim()));
                 var decodedText = System.Net.WebUtility.HtmlDecode(text).Trim();
-                System.Diagnostics.Debug.WriteLine($"StripHtml: обработано {decodedText.Length} символов");
+                System.Diagnostics.Debug.WriteLine($"StripHtml: обработано {decodedText.Length} символов, текст: {decodedText.Substring(0, Math.Min(50, decodedText.Length))}...");
                 return decodedText;
             }
             catch (Exception ex)
@@ -61,14 +62,15 @@ namespace BookApp.Services
             }
         }
 
-        private List<(bool isChapterStart, bool isTitle, bool isToc, Paragraph paragraph)> ParseEpub(string filePath)
+        private List<(bool isChapterStart, bool isTitle, bool isToc, bool isPageBreak, Paragraph paragraph)> ParseEpub(string filePath)
         {
-            var content = new List<(bool isChapterStart, bool isTitle, bool isToc, Paragraph paragraph)>();
+            var content = new List<(bool isChapterStart, bool isTitle, bool isToc, bool isPageBreak, Paragraph paragraph)>();
             try
             {
                 var epubBook = EpubReader.ReadBook(filePath);
+                System.Diagnostics.Debug.WriteLine($"EPUB: Загружено {epubBook.ReadingOrder.Count} файлов содержимого");
 
-                // Добавляем название книги
+                // Название книги
                 if (!string.IsNullOrWhiteSpace(epubBook.Title))
                 {
                     var titleParagraph = new Paragraph(new Run(epubBook.Title.Trim()))
@@ -78,11 +80,12 @@ namespace BookApp.Services
                         Margin = new Thickness(0, 20, 0, 20),
                         TextAlignment = TextAlignment.Center
                     };
-                    content.Add((false, true, false, titleParagraph));
+                    content.Add((false, true, false, false, titleParagraph));
+                    content.Add((false, false, false, true, new Paragraph()));
                     System.Diagnostics.Debug.WriteLine($"EPUB: Добавлено название: {epubBook.Title}");
                 }
 
-                // Создаём оглавление
+                // Оглавление
                 var tocItems = new List<string>();
                 var processedTitles = new HashSet<string>();
 
@@ -93,16 +96,12 @@ namespace BookApp.Services
                         tocItems.Add($"{new string(' ', depth * 2)}{navItem.Title.Trim()}");
                         processedTitles.Add(navItem.Title + depth);
                     }
-                    foreach (var childItem in navItem.NestedItems)
-                    {
-                        CollectTocItems(childItem, depth + 1);
-                    }
+                    foreach (var child in navItem.NestedItems)
+                        CollectTocItems(child, depth + 1);
                 }
 
                 foreach (var navItem in epubBook.Navigation)
-                {
                     CollectTocItems(navItem);
-                }
 
                 if (tocItems.Any())
                 {
@@ -112,105 +111,108 @@ namespace BookApp.Services
                         FontSize = 20,
                         Margin = new Thickness(0, 10, 0, 10)
                     };
-                    content.Add((false, false, true, tocHeader));
+                    content.Add((false, false, true, false, tocHeader));
                     System.Diagnostics.Debug.WriteLine("EPUB: Добавлен заголовок оглавления");
 
-                    foreach (var tocItem in tocItems)
+                    foreach (var item in tocItems)
                     {
-                        var tocParagraph = new Paragraph(new Run(tocItem))
+                        var tocParagraph = new Paragraph(new Run(item))
                         {
                             FontSize = 16,
                             Margin = new Thickness(0, 0, 0, 5)
                         };
-                        content.Add((false, false, true, tocParagraph));
-                        System.Diagnostics.Debug.WriteLine($"EPUB: Добавлен пункт оглавления: {tocItem}");
+                        content.Add((false, false, true, false, tocParagraph));
+                        System.Diagnostics.Debug.WriteLine($"EPUB: Добавлен пункт оглавления: {item}");
                     }
+
+                    content.Add((false, false, false, true, new Paragraph()));
+                    System.Diagnostics.Debug.WriteLine("EPUB: Добавлен разрыв страницы после оглавления");
                 }
 
-                // Обрабатываем содержимое книги
-                processedTitles.Clear(); // Сбрасываем для обработки текста
-                void ProcessNavigationItem(EpubNavigationItem navItem, int depth = 0)
+                // Содержимое книги
+                processedTitles.Clear();
+                foreach (var textFile in epubBook.ReadingOrder)
                 {
-                    if (!string.IsNullOrWhiteSpace(navItem.Title) && !processedTitles.Contains(navItem.Title + depth))
+                    //System.Diagnostics.Debug.WriteLine($"EPUB: Обработка файла содержимого: {textFile.FileName}");
+                    var doc = new HtmlDocument();
+                    doc.LoadHtml(textFile.Content);
+
+                    // Попытка 1: Выбор всех узлов с текстом
+                    var nodes = doc.DocumentNode.SelectNodes("//*[not(self::script or self::style)]") ?? new HtmlNodeCollection(null);
+                    //System.Diagnostics.Debug.WriteLine($"EPUB: Найдено {nodes.Count} узлов в файле {textFile.FileName} (попытка 1)");
+
+                    if (!nodes.Any())
                     {
-                        var chapterTitle = new Paragraph(new Run(navItem.Title.Trim()))
+                        // Попытка 2: Выбор родительских узлов текстовых узлов
+                        nodes = doc.DocumentNode.SelectNodes("//text()[normalize-space() and not(parent::script or parent::style)]/..") ?? new HtmlNodeCollection(null);
+                        //System.Diagnostics.Debug.WriteLine($"EPUB: Найдено {nodes.Count} узлов в файле {textFile.FileName} (попытка 2)");
+                    }
+
+                    if (!nodes.Any())
+                    {
+                        // Попытка 3: Извлечение всего текста из файла
+                        var rawText = StripHtml(doc.DocumentNode.OuterHtml);
+                        if (!string.IsNullOrWhiteSpace(rawText))
                         {
-                            FontWeight = FontWeights.Bold,
-                            FontSize = 20,
-                            Margin = new Thickness(0, 10, 0, 10)
+                            var paragraph = new Paragraph(new Run(rawText.Trim()))
+                            {
+                                FontSize = 16,
+                                Margin = new Thickness(0, 0, 0, 10)
+                            };
+                            content.Add((false, false, false, false, paragraph));
+                            System.Diagnostics.Debug.WriteLine($"EPUB: Добавлен текст из файла (попытка 3): {rawText.Substring(0, Math.Min(50, rawText.Length))}...");
+                        }
+                        else
+                        {
+                            //System.Diagnostics.Debug.WriteLine($"EPUB: Текст не найден в файле {textFile.FileName}");
+                        }
+                        continue;
+                    }
+
+                    foreach (var node in nodes)
+                    {
+                        var text = StripHtml(node.OuterHtml);
+                        if (string.IsNullOrWhiteSpace(text))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"EPUB: Пропущен пустой узел: {node.Name}");
+                            continue;
+                        }
+
+                        if (processedTitles.Contains(text))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"EPUB: Пропущен дубликат текста: {text.Substring(0, Math.Min(50, text.Length))}...");
+                            continue;
+                        }
+
+                        var isChapter = node.Name is "h1" or "h2" or "h3" || Regex.IsMatch(text, @"^(Глава|Chapter)\s", RegexOptions.IgnoreCase);
+                        var paragraph = new Paragraph(new Run(text.Trim()))
+                        {
+                            FontWeight = isChapter ? FontWeights.Bold : FontWeights.Normal,
+                            FontSize = isChapter ? 20 : 16,
+                            Margin = new Thickness(0, isChapter ? 10 : 0, 0, 10)
                         };
-                        content.Add((true, false, false, chapterTitle));
-                        processedTitles.Add(navItem.Title + depth);
-                        System.Diagnostics.Debug.WriteLine($"EPUB: Добавлен заголовок главы: {navItem.Title}");
-                    }
+                        content.Add((isChapter, false, false, false, paragraph));
 
-                    if (navItem.HtmlContentFile != null)
-                    {
-                        try
+                        if (isChapter)
                         {
-                            var text = StripHtml(navItem.HtmlContentFile.Content);
-                            var lines = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-
-                            foreach (var line in lines)
-                            {
-                                var trimmedLine = line.Trim();
-                                if (!string.IsNullOrWhiteSpace(trimmedLine) && !processedTitles.Contains(trimmedLine + depth))
-                                {
-                                    var isChapterStart = Regex.IsMatch(trimmedLine, @"^(Глава|Chapter)\s", RegexOptions.IgnoreCase);
-                                    var paragraph = new Paragraph(new Run(trimmedLine))
-                                    {
-                                        FontWeight = isChapterStart ? FontWeights.Bold : FontWeights.Normal,
-                                        FontSize = isChapterStart ? 20 : 16,
-                                        Margin = new Thickness(0, isChapterStart ? 10 : 0, 0, 10)
-                                    };
-                                    content.Add((isChapterStart, false, false, paragraph));
-                                    System.Diagnostics.Debug.WriteLine($"EPUB: Добавлен текст: {trimmedLine.Substring(0, Math.Min(50, trimmedLine.Length))}...");
-                                }
-                            }
+                            content.Add((false, false, false, true, new Paragraph()));
+                            System.Diagnostics.Debug.WriteLine($"EPUB: Добавлен разрыв страницы после главы: {text.Substring(0, Math.Min(50, text.Length))}...");
                         }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"EPUB: Ошибка чтения содержимого HTML: {ex.Message}");
-                        }
-                    }
 
-                    foreach (var childItem in navItem.NestedItems)
-                    {
-                        ProcessNavigationItem(childItem, depth + 1);
+                        processedTitles.Add(text);
+                        System.Diagnostics.Debug.WriteLine($"EPUB: Добавлен {(isChapter ? "заголовок главы" : "текст")}: {text.Substring(0, Math.Min(50, text.Length))}...");
                     }
                 }
 
-                foreach (var navItem in epubBook.Navigation)
+                if (content.Count <= tocItems.Count + 2)
                 {
-                    ProcessNavigationItem(navItem);
-                }
-
-                // Резервный проход по ReadingOrder
-                if (content.Count <= (tocItems.Any() ? tocItems.Count + 1 : 0) + (string.IsNullOrWhiteSpace(epubBook.Title) ? 0 : 1))
-                {
-                    System.Diagnostics.Debug.WriteLine("EPUB: Навигация пуста или мало контента, обрабатываем ReadingOrder");
-                    foreach (var textFile in epubBook.ReadingOrder)
+                    System.Diagnostics.Debug.WriteLine("EPUB: Текст не извлечён, добавляем заглушку");
+                    var placeholder = new Paragraph(new Run("Содержимое книги не удалось извлечь. Проверьте файл."))
                     {
-                        var text = StripHtml(textFile.Content);
-                        var lines = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-
-                        foreach (var line in lines)
-                        {
-                            var trimmedLine = line.Trim();
-                            if (!string.IsNullOrWhiteSpace(trimmedLine))
-                            {
-                                var isChapterStart = Regex.IsMatch(trimmedLine, @"^(Глава|Chapter)\s", RegexOptions.IgnoreCase);
-                                var paragraph = new Paragraph(new Run(trimmedLine))
-                                {
-                                    FontWeight = isChapterStart ? FontWeights.Bold : FontWeights.Normal,
-                                    FontSize = isChapterStart ? 20 : 16,
-                                    Margin = new Thickness(0, isChapterStart ? 10 : 0, 0, 10)
-                                };
-                                content.Add((isChapterStart, false, false, paragraph));
-                                System.Diagnostics.Debug.WriteLine($"EPUB (резерв): Добавлен текст: {trimmedLine.Substring(0, Math.Min(50, trimmedLine.Length))}...");
-                            }
-                        }
-                    }
+                        FontSize = 16,
+                        Margin = new Thickness(0, 0, 0, 10)
+                    };
+                    content.Add((false, false, false, false, placeholder));
                 }
             }
             catch (Exception ex)
@@ -222,14 +224,14 @@ namespace BookApp.Services
             return content;
         }
 
-        private List<(bool isChapterStart, bool isTitle, bool isToc, Paragraph paragraph)> ParseFb2(string filePath)
+        private List<(bool isChapterStart, bool isTitle, bool isToc, bool isPageBreak, Paragraph paragraph)> ParseFb2(string filePath)
         {
-            var content = new List<(bool isChapterStart, bool isTitle, bool isToc, Paragraph paragraph)>();
+            var content = new List<(bool isChapterStart, bool isTitle, bool isToc, bool isPageBreak, Paragraph paragraph)>();
             try
             {
                 var doc = XDocument.Load(filePath);
 
-                // Извлекаем название книги
+                // Название книги
                 var titleInfo = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "title-info");
                 if (titleInfo != null)
                 {
@@ -243,12 +245,13 @@ namespace BookApp.Services
                             Margin = new Thickness(0, 20, 0, 20),
                             TextAlignment = TextAlignment.Center
                         };
-                        content.Add((false, true, false, titleParagraph));
+                        content.Add((false, true, false, false, titleParagraph));
+                        content.Add((false, false, false, true, new Paragraph()));
                         System.Diagnostics.Debug.WriteLine($"FB2: Добавлено название: {bookTitle}");
                     }
                 }
 
-                // Создаём оглавление
+                // Оглавление
                 var tocItems = new List<string>();
                 var body = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "body");
                 if (body != null)
@@ -276,22 +279,25 @@ namespace BookApp.Services
                         FontSize = 20,
                         Margin = new Thickness(0, 10, 0, 10)
                     };
-                    content.Add((false, false, true, tocHeader));
+                    content.Add((false, false, true, false, tocHeader));
                     System.Diagnostics.Debug.WriteLine("FB2: Добавлен заголовок оглавления");
 
-                    foreach (var tocItem in tocItems)
+                    foreach (var item in tocItems)
                     {
-                        var tocParagraph = new Paragraph(new Run(tocItem))
+                        var tocParagraph = new Paragraph(new Run(item))
                         {
                             FontSize = 16,
                             Margin = new Thickness(0, 0, 0, 5)
                         };
-                        content.Add((false, false, true, tocParagraph));
-                        System.Diagnostics.Debug.WriteLine($"FB2: Добавлен пункт оглавления: {tocItem}");
+                        content.Add((false, false, true, false, tocParagraph));
+                        System.Diagnostics.Debug.WriteLine($"FB2: Добавлен пункт оглавления: {item}");
                     }
+
+                    content.Add((false, false, false, true, new Paragraph()));
+                    System.Diagnostics.Debug.WriteLine("FB2: Добавлен разрыв страницы после оглавления");
                 }
 
-                // Обрабатываем содержимое
+                // Содержимое
                 if (body != null)
                 {
                     var sections = body.Descendants().Where(e => e.Name.LocalName == "section");
@@ -309,23 +315,25 @@ namespace BookApp.Services
                                     FontSize = 20,
                                     Margin = new Thickness(0, 10, 0, 10)
                                 };
-                                content.Add((true, false, false, titleParagraph));
+                                content.Add((true, false, false, false, titleParagraph));
+                                content.Add((false, false, false, true, new Paragraph()));
                                 System.Diagnostics.Debug.WriteLine($"FB2: Добавлен заголовок главы: {titleText}");
                             }
                         }
 
-                        var sectionParagraphs = section.Descendants().Where(e => e.Name.LocalName == "p");
-                        foreach (var p in sectionParagraphs)
+                        var sectionElements = section.Descendants()
+                            .Where(e => e.Name.LocalName is "p" or "v" or "empty-line" or "subtitle" or "epigraph" or "cite" or "annotation");
+                        foreach (var element in sectionElements)
                         {
-                            var text = StripHtml(p.Value);
-                            if (!string.IsNullOrWhiteSpace(text))
+                            var text = element.Name.LocalName == "empty-line" ? "" : StripHtml(element.Value);
+                            if (element.Name.LocalName == "empty-line" || !string.IsNullOrWhiteSpace(text))
                             {
                                 var paragraph = new Paragraph(new Run(text.Trim()))
                                 {
                                     FontSize = 16,
                                     Margin = new Thickness(0, 0, 0, 10)
                                 };
-                                content.Add((false, false, false, paragraph));
+                                content.Add((false, false, false, false, paragraph));
                                 System.Diagnostics.Debug.WriteLine($"FB2: Добавлен текст: {text.Substring(0, Math.Min(50, text.Length))}...");
                             }
                         }
@@ -334,6 +342,17 @@ namespace BookApp.Services
                 else
                 {
                     System.Diagnostics.Debug.WriteLine("FB2: Тег <body> не найден");
+                }
+
+                if (content.Count <= tocItems.Count + 2)
+                {
+                    System.Diagnostics.Debug.WriteLine("FB2: Текст не извлечён, добавляем заглушку");
+                    var placeholder = new Paragraph(new Run("Содержимое книги не удалось извлечь. Проверьте файл."))
+                    {
+                        FontSize = 16,
+                        Margin = new Thickness(0, 0, 0, 10)
+                    };
+                    content.Add((false, false, false, false, placeholder));
                 }
             }
             catch (Exception ex)
@@ -345,14 +364,14 @@ namespace BookApp.Services
             return content;
         }
 
-        private List<(bool isChapterStart, bool isTitle, bool isToc, Paragraph paragraph)> ParsePdf(string filePath)
+        private List<(bool isChapterStart, bool isTitle, bool isToc, bool isPageBreak, Paragraph paragraph)> ParsePdf(string filePath)
         {
-            var content = new List<(bool isChapterStart, bool isTitle, bool isToc, Paragraph paragraph)>();
+            var content = new List<(bool isChapterStart, bool isTitle, bool isToc, bool isPageBreak, Paragraph paragraph)>();
             try
             {
                 using var document = PdfDocument.Load(filePath);
 
-                // Название книги (имя файла)
+                // Название книги
                 var bookTitle = Path.GetFileNameWithoutExtension(filePath);
                 var titleParagraph = new Paragraph(new Run(bookTitle.Trim()))
                 {
@@ -361,26 +380,50 @@ namespace BookApp.Services
                     Margin = new Thickness(0, 20, 0, 20),
                     TextAlignment = TextAlignment.Center
                 };
-                content.Add((false, true, false, titleParagraph));
+                content.Add((false, true, false, false, titleParagraph));
+                content.Add((false, false, false, true, new Paragraph()));
                 System.Diagnostics.Debug.WriteLine($"PDF: Добавлено название: {bookTitle}");
 
-                // Оглавление (заглушка)
+                // Оглавление
                 var tocHeader = new Paragraph(new Run("Оглавление"))
                 {
                     FontWeight = FontWeights.Bold,
                     FontSize = 20,
                     Margin = new Thickness(0, 10, 0, 10)
                 };
-                content.Add((false, false, true, tocHeader));
+                content.Add((false, false, true, false, tocHeader));
                 System.Diagnostics.Debug.WriteLine("PDF: Добавлен заголовок оглавления");
 
+                for (int i = 0; i < Math.Min(document.PageCount, 5); i++)
+                {
+                    var text = document.GetPdfText(i);
+                    var lines = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+                    foreach (var line in lines)
+                    {
+                        var trimmedLine = line.Trim();
+                        if (Regex.IsMatch(trimmedLine, @"^\d+\.\s|^Chapter\s", RegexOptions.IgnoreCase))
+                        {
+                            var tocParagraph = new Paragraph(new Run(trimmedLine))
+                            {
+                                FontSize = 16,
+                                Margin = new Thickness(0, 0, 0, 5)
+                            };
+                            content.Add((false, false, true, false, tocParagraph));
+                            System.Diagnostics.Debug.WriteLine($"PDF: Добавлен пункт оглавления: {trimmedLine}");
+                        }
+                    }
+                }
+
+                content.Add((false, false, false, true, new Paragraph()));
+                System.Diagnostics.Debug.WriteLine("PDF: Добавлен разрыв страницы после оглавления");
+
                 // Содержимое
+                var currentParagraphText = new StringBuilder();
                 for (int i = 0; i < document.PageCount; i++)
                 {
                     var text = document.GetPdfText(i);
                     var lines = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
 
-                    var currentParagraphText = new StringBuilder();
                     foreach (var line in lines)
                     {
                         var trimmedLine = line.Trim();
@@ -389,15 +432,20 @@ namespace BookApp.Services
                             if (currentParagraphText.Length > 0)
                             {
                                 var textContent = currentParagraphText.ToString().Trim();
-                                var isChapterStart = Regex.IsMatch(textContent, @"^(Глава|Chapter)\s", RegexOptions.IgnoreCase);
+                                var isChapter = Regex.IsMatch(textContent, @"^(Глава|Chapter)\s", RegexOptions.IgnoreCase);
                                 var paragraph = new Paragraph(new Run(textContent))
                                 {
-                                    FontWeight = isChapterStart ? FontWeights.Bold : FontWeights.Normal,
-                                    FontSize = isChapterStart ? 20 : 16,
-                                    Margin = new Thickness(0, isChapterStart ? 10 : 0, 0, 10)
+                                    FontWeight = isChapter ? FontWeights.Bold : FontWeights.Normal,
+                                    FontSize = isChapter ? 20 : 16,
+                                    Margin = new Thickness(0, isChapter ? 10 : 0, 0, 10)
                                 };
-                                content.Add((isChapterStart, false, false, paragraph));
-                                System.Diagnostics.Debug.WriteLine($"PDF: Добавлен текст: {textContent.Substring(0, Math.Min(50, textContent.Length))}...");
+                                content.Add((isChapter, false, false, false, paragraph));
+                                if (isChapter)
+                                {
+                                    content.Add((false, false, false, true, new Paragraph()));
+                                    System.Diagnostics.Debug.WriteLine($"PDF: Добавлен разрыв страницы после главы: {textContent.Substring(0, Math.Min(50, textContent.Length))}...");
+                                }
+                                System.Diagnostics.Debug.WriteLine($"PDF: Добавлен {(isChapter ? "заголовок главы" : "текст")}: {textContent.Substring(0, Math.Min(50, textContent.Length))}...");
                                 currentParagraphText.Clear();
                             }
                         }
@@ -406,20 +454,35 @@ namespace BookApp.Services
                             currentParagraphText.AppendLine(trimmedLine);
                         }
                     }
+                }
 
-                    if (currentParagraphText.Length > 0)
+                if (currentParagraphText.Length > 0)
+                {
+                    var textContent = currentParagraphText.ToString().Trim();
+                    var isChapter = Regex.IsMatch(textContent, @"^(Глава|Chapter)\s", RegexOptions.IgnoreCase);
+                    var paragraph = new Paragraph(new Run(textContent))
                     {
-                        var textContent = currentParagraphText.ToString().Trim();
-                        var isChapterStart = Regex.IsMatch(textContent, @"^(Глава|Chapter)\s", RegexOptions.IgnoreCase);
-                        var paragraph = new Paragraph(new Run(textContent))
-                        {
-                            FontWeight = isChapterStart ? FontWeights.Bold : FontWeights.Normal,
-                            FontSize = isChapterStart ? 20 : 16,
-                            Margin = new Thickness(0, isChapterStart ? 10 : 0, 0, 10)
-                        };
-                        content.Add((isChapterStart, false, false, paragraph));
-                        System.Diagnostics.Debug.WriteLine($"PDF: Добавлен текст: {textContent.Substring(0, Math.Min(50, textContent.Length))}...");
+                        FontWeight = isChapter ? FontWeights.Bold : FontWeights.Normal,
+                        FontSize = isChapter ? 20 : 16,
+                        Margin = new Thickness(0, isChapter ? 10 : 0, 0, 10)
+                    };
+                    content.Add((isChapter, false, false, false, paragraph));
+                    if (isChapter)
+                    {
+                        content.Add((false, false, false, true, new Paragraph()));
                     }
+                    System.Diagnostics.Debug.WriteLine($"PDF: Добавлен {(isChapter ? "заголовок главы" : "текст")}: {textContent.Substring(0, Math.Min(50, textContent.Length))}...");
+                }
+
+                if (content.Count <= 2)
+                {
+                    System.Diagnostics.Debug.WriteLine("PDF: Текст не извлечён, добавляем заглушку");
+                    var placeholder = new Paragraph(new Run("Содержимое книги не удалось извлечь. Возможно, PDF содержит отсканированные страницы."))
+                    {
+                        FontSize = 16,
+                        Margin = new Thickness(0, 0, 0, 10)
+                    };
+                    content.Add((false, false, false, false, placeholder));
                 }
             }
             catch (Exception ex)

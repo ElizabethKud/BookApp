@@ -85,7 +85,6 @@
             <Style TargetType="FlowDocumentScrollViewer">
                 <Setter Property="VerticalScrollBarVisibility" Value="Hidden"/>
                 <Setter Property="HorizontalScrollBarVisibility" Value="Hidden"/>
-                <Setter Property="IsEnabled" Value="False"/>
             </Style>
         </ResourceDictionary>
     </Window.Resources>
