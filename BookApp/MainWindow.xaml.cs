@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -32,14 +33,10 @@ namespace BookApp
             _currentUser = username;
             NicknameTextBox.Text = _currentUser;
 
-            // Получаем ID пользователя
             using var db = CreateDbContext();
             _currentUserId = db.Users.First(u => u.Username == _currentUser).Id;
 
-            // Инициализация базовых книг
             _dbService.InitializeDefaultBooks();
-
-            // Загрузка настроек пользователя
             LoadUserSettings();
         }
 
@@ -122,15 +119,27 @@ namespace BookApp
                     return;
                 }
 
+                Debug.WriteLine($"Book parsed. Total paragraphs: {content.Count}");
+
                 var history = db.ReadingHistory
                     .FirstOrDefault(rh => rh.UserId == _currentUserId && rh.BookId == book.Id);
 
                 _currentPageIndex = history?.LastReadPage ?? 0;
+                Debug.WriteLine($"Opening book at page index: {_currentPageIndex}");
 
                 DisplayBookContent(content);
+
+                // Дополнительная проверка: если страница пустая, попробуем перейти на следующую
+                if (PageDocument.Blocks.Count == 0 && _currentPageIndex < CalculateTotalPages() - 1)
+                {
+                    Debug.WriteLine("Initial page is empty, trying next page...");
+                    _currentPageIndex++;
+                    ShowCurrentPage();
+                }
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"Error opening book: {ex.Message}");
                 MessageBox.Show($"Ошибка при открытии книги: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -149,8 +158,7 @@ namespace BookApp
             _currentBook = null;
             _bookContent.Clear();
             _currentPageIndex = 0;
-            LeftPageDocument.Blocks.Clear();
-            RightPageDocument.Blocks.Clear();
+            PageDocument.Blocks.Clear();
         }
 
         private void SaveReadingProgress(int pageNumber)
@@ -314,65 +322,70 @@ namespace BookApp
         private void DisplayBookContent(List<(bool isChapterStart, Paragraph paragraph)> content)
         {
             _bookContent = content ?? new List<(bool isChapterStart, Paragraph paragraph)>();
-            _currentPageIndex = 0;
+            Debug.WriteLine($"Displaying book content. Total paragraphs: {_bookContent.Count}, Current page index: {_currentPageIndex}");
+            _currentPageIndex = Math.Max(0, Math.Min(_currentPageIndex, CalculateTotalPages() - 1));
             ShowCurrentPage();
         }
 
         private void ShowCurrentPage()
         {
-            LeftPageDocument.Blocks.Clear();
-            RightPageDocument.Blocks.Clear();
+            PageDocument.Blocks.Clear();
 
             if (_bookContent == null || !_bookContent.Any())
             {
+                Debug.WriteLine("No content to display.");
                 return;
             }
 
-            double pageHeight = ActualHeight - 100;
+            double pageHeight = ActualHeight - 100; // Учитываем отступы и панель
             double fontSize = (double)Resources["PageFontSize"];
             double lineHeight = fontSize * 1.5;
             int maxLinesPerPage = (int)(pageHeight / lineHeight);
 
-            int leftPageStartIndex = _currentPageIndex * 2;
-            int rightPageStartIndex = leftPageStartIndex + 1;
+            int pageStartIndex = FindPageStartIndex(_currentPageIndex);
 
-            if (leftPageStartIndex < CalculateTotalPages())
+            Debug.WriteLine($"Showing page {_currentPageIndex}. Start index: {pageStartIndex}, Max lines per page: {maxLinesPerPage}");
+
+            if (pageStartIndex >= _bookContent.Count)
             {
-                int currentIndex = FindPageStartIndex(leftPageStartIndex);
-                int linesAdded = 0;
-                while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
-                {
-                    var (isChapterStart, paragraph) = _bookContent[currentIndex];
-                    if (isChapterStart && linesAdded > 0)
-                    {
-                        break;
-                    }
-                    LeftPageDocument.Blocks.Add(paragraph);
-                    linesAdded += EstimateLineCount(paragraph, fontSize);
-                    currentIndex++;
-                }
+                Debug.WriteLine("Page start index exceeds content length. Adjusting...");
+                _currentPageIndex = Math.Max(0, CalculateTotalPages() - 1);
+                pageStartIndex = FindPageStartIndex(_currentPageIndex);
             }
 
-            if (rightPageStartIndex < CalculateTotalPages())
+            int linesAdded = 0;
+            int currentIndex = pageStartIndex;
+
+            while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
             {
-                int currentIndex = FindPageStartIndex(rightPageStartIndex);
-                int linesAdded = 0;
-                while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
+                var (isChapterStart, paragraph) = _bookContent[currentIndex];
+                if (isChapterStart && linesAdded > 0)
                 {
-                    var (isChapterStart, paragraph) = _bookContent[currentIndex];
-                    if (isChapterStart && linesAdded > 0)
-                    {
-                        break;
-                    }
-                    RightPageDocument.Blocks.Add(paragraph);
-                    linesAdded += EstimateLineCount(paragraph, fontSize);
-                    currentIndex++;
+                    Debug.WriteLine("Chapter start detected, breaking to start new page.");
+                    break; // Начинаем новую главу с новой страницы
                 }
+                int linesForParagraph = EstimateLineCount(paragraph, fontSize);
+                if (linesAdded + linesForParagraph > maxLinesPerPage && linesAdded > 0)
+                {
+                    Debug.WriteLine("Paragraph exceeds page height, breaking.");
+                    break; // Не помещается на текущей странице
+                }
+                PageDocument.Blocks.Add(paragraph);
+                linesAdded += linesForParagraph;
+                currentIndex++;
             }
+
+            Debug.WriteLine($"Page {_currentPageIndex} displayed. Paragraphs added: {PageDocument.Blocks.Count}, Lines added: {linesAdded}");
         }
 
         private int FindPageStartIndex(int pageIndex)
         {
+            if (_bookContent == null || !_bookContent.Any())
+            {
+                Debug.WriteLine("No content for page indexing.");
+                return 0;
+            }
+
             int totalPages = 0;
             int currentIndex = 0;
             double pageHeight = ActualHeight - 100;
@@ -390,12 +403,18 @@ namespace BookApp
                     {
                         break;
                     }
-                    linesAdded += EstimateLineCount(paragraph, fontSize);
+                    int linesForParagraph = EstimateLineCount(paragraph, fontSize);
+                    if (linesAdded + linesForParagraph > maxLinesPerPage && linesAdded > 0)
+                    {
+                        break;
+                    }
+                    linesAdded += linesForParagraph;
                     currentIndex++;
                 }
                 totalPages++;
             }
 
+            Debug.WriteLine($"Page {pageIndex} starts at index {currentIndex}. Total pages so far: {totalPages}");
             return currentIndex;
         }
 
@@ -403,6 +422,7 @@ namespace BookApp
         {
             if (_bookContent == null || !_bookContent.Any())
             {
+                Debug.WriteLine("No content to calculate pages.");
                 return 0;
             }
 
@@ -423,12 +443,18 @@ namespace BookApp
                     {
                         break;
                     }
-                    linesAdded += EstimateLineCount(paragraph, fontSize);
+                    int linesForParagraph = EstimateLineCount(paragraph, fontSize);
+                    if (linesAdded + linesForParagraph > maxLinesPerPage && linesAdded > 0)
+                    {
+                        break;
+                    }
+                    linesAdded += linesForParagraph;
                     currentIndex++;
                 }
                 totalPages++;
             }
 
+            Debug.WriteLine($"Total pages calculated: {totalPages}");
             return totalPages;
         }
 
@@ -437,12 +463,23 @@ namespace BookApp
             var run = paragraph.Inlines.OfType<Run>().FirstOrDefault();
             if (run == null || string.IsNullOrEmpty(run.Text))
             {
+                Debug.WriteLine("Empty paragraph detected.");
                 return 1;
             }
             string text = run.Text;
-            int avgCharsPerLine = (int)(ActualWidth / (fontSize * 0.6));
+
+            // Используем ширину PageViewer, но проверяем, определена ли она
+            double viewerWidth = PageViewer.ActualWidth > 0 ? PageViewer.ActualWidth : 800; // 800 — примерная начальная ширина окна
+            int avgCharsPerLine = (int)((viewerWidth - 40) / (fontSize * 0.6)); // 40 — PagePadding
+            if (avgCharsPerLine <= 0)
+            {
+                avgCharsPerLine = 50; // Минимальное значение для безопасности
+            }
+
             int lines = (int)Math.Ceiling((double)text.Length / avgCharsPerLine);
-            return Math.Max(lines, 1);
+            int estimatedLines = Math.Max(lines, 1);
+            Debug.WriteLine($"Estimating lines for paragraph: '{text.Substring(0, Math.Min(50, text.Length))}'... Viewer width: {viewerWidth}, Avg chars per line: {avgCharsPerLine}, Lines: {estimatedLines}");
+            return estimatedLines;
         }
 
         private void PrevPage_Click(object sender, RoutedEventArgs e)
@@ -457,11 +494,29 @@ namespace BookApp
 
         private void NextPage_Click(object sender, RoutedEventArgs e)
         {
-            if ((_currentPageIndex + 1) * 2 < CalculateTotalPages())
+            if (_currentPageIndex + 1 < CalculateTotalPages())
             {
                 _currentPageIndex++;
                 ShowCurrentPage();
                 SaveReadingProgress(_currentPageIndex);
+            }
+        }
+        
+        private void PageViewer_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (_bookContent != null && _bookContent.Any())
+            {
+                Debug.WriteLine("PageViewer loaded, updating display...");
+                ShowCurrentPage();
+            }
+        }
+        
+        private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_bookContent != null && _bookContent.Any())
+            {
+                Debug.WriteLine("Window size changed, updating display...");
+                ShowCurrentPage();
             }
         }
 
@@ -469,6 +524,7 @@ namespace BookApp
         {
             if (_bookContent != null && _bookContent.Any())
             {
+                Debug.WriteLine("Updating current page...");
                 ShowCurrentPage();
             }
         }
