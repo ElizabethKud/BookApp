@@ -25,7 +25,8 @@ namespace BookApp
         private int _currentUserId;
         private Book _currentBook;
         private List<(bool isChapterStart, Paragraph paragraph)> _bookContent = new();
-        private int _currentPageIndex = 0;
+        private int _currentSpreadIndex = 0; // Индекс разворота (каждая пара страниц)
+        private List<(string title, int paragraphIndex)> _tableOfContents = new(); // Оглавление
 
         public MainWindow(string username)
         {
@@ -44,11 +45,11 @@ namespace BookApp
         {
             if (e.Key == Key.A)
             {
-                PrevPage_Click(sender, e);
+                PrevSpread_Click(sender, e);
             }
             else if (e.Key == Key.D)
             {
-                NextPage_Click(sender, e);
+                NextSpread_Click(sender, e);
             }
             else if (e.Key == Key.O && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
             {
@@ -121,20 +122,39 @@ namespace BookApp
 
                 Debug.WriteLine($"Book parsed. Total paragraphs: {content.Count}");
 
+                // Формируем оглавление
+                _tableOfContents.Clear();
+                for (int i = 0; i < content.Count; i++)
+                {
+                    var (isChapterStart, paragraph) = content[i];
+                    if (isChapterStart)
+                    {
+                        var run = paragraph.Inlines.OfType<Run>().FirstOrDefault();
+                        if (run != null && !string.IsNullOrEmpty(run.Text))
+                        {
+                            _tableOfContents.Add((run.Text, i));
+                        }
+                    }
+                }
+
                 var history = db.ReadingHistory
                     .FirstOrDefault(rh => rh.UserId == _currentUserId && rh.BookId == book.Id);
 
-                _currentPageIndex = history?.LastReadPage ?? 0;
-                Debug.WriteLine($"Opening book at page index: {_currentPageIndex}");
+                _currentSpreadIndex = history?.LastReadPage ?? 0;
+                Debug.WriteLine($"Opening book at spread index: {_currentSpreadIndex}");
 
                 DisplayBookContent(content);
 
-                // Дополнительная проверка: если страница пустая, попробуем перейти на следующую
-                if (PageDocument.Blocks.Count == 0 && _currentPageIndex < CalculateTotalPages() - 1)
+                // Показываем название книги
+                BookTitleTextBlock.Text = book.Title;
+                BookTitleTextBlock.Visibility = Visibility.Visible;
+
+                // Дополнительная проверка: если разворот пустой, попробуем перейти на следующий
+                if (LeftPageDocument.Blocks.Count == 0 && _currentSpreadIndex < CalculateTotalSpreads() - 1)
                 {
-                    Debug.WriteLine("Initial page is empty, trying next page...");
-                    _currentPageIndex++;
-                    ShowCurrentPage();
+                    Debug.WriteLine("Initial spread is empty, trying next spread...");
+                    _currentSpreadIndex++;
+                    ShowCurrentSpread();
                 }
             }
             catch (Exception ex)
@@ -153,15 +173,17 @@ namespace BookApp
         {
             if (_currentBook != null)
             {
-                SaveReadingProgress(_currentPageIndex);
+                SaveReadingProgress(_currentSpreadIndex);
             }
             _currentBook = null;
             _bookContent.Clear();
-            _currentPageIndex = 0;
-            PageDocument.Blocks.Clear();
+            _tableOfContents.Clear();
+            _currentSpreadIndex = 0;
+            LeftPageDocument.Blocks.Clear();
+            BookTitleTextBlock.Visibility = Visibility.Collapsed;
         }
 
-        private void SaveReadingProgress(int pageNumber)
+        private void SaveReadingProgress(int spreadNumber)
         {
             if (_currentBook == null) return;
 
@@ -175,14 +197,14 @@ namespace BookApp
                 {
                     UserId = _currentUserId,
                     BookId = _currentBook.Id,
-                    LastReadPage = pageNumber,
+                    LastReadPage = spreadNumber,
                     LastReadDate = DateTime.UtcNow
                 };
                 db.ReadingHistory.Add(history);
             }
             else
             {
-                history.LastReadPage = pageNumber;
+                history.LastReadPage = spreadNumber;
                 history.LastReadDate = DateTime.UtcNow;
             }
             db.SaveChanges();
@@ -192,7 +214,7 @@ namespace BookApp
         {
             if (_currentBook != null)
             {
-                SaveReadingProgress(_currentPageIndex);
+                SaveReadingProgress(_currentSpreadIndex);
             }
             base.OnClosing(e);
         }
@@ -287,7 +309,7 @@ namespace BookApp
                 var color = item.Tag.ToString();
                 Resources["PageBackground"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
                 SaveDisplaySettings();
-                UpdateCurrentPage();
+                UpdateCurrentSpread();
             }
         }
 
@@ -298,7 +320,7 @@ namespace BookApp
                 var color = item.Tag.ToString();
                 Resources["PageForeground"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
                 SaveDisplaySettings();
-                UpdateCurrentPage();
+                UpdateCurrentSpread();
             }
         }
 
@@ -306,7 +328,7 @@ namespace BookApp
         {
             Resources["PageFontSize"] = FontSizeSlider.Value;
             SaveDisplaySettings();
-            UpdateCurrentPage();
+            UpdateCurrentSpread();
         }
 
         private void FontFamilyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -315,21 +337,21 @@ namespace BookApp
             {
                 Resources["PageFontFamily"] = new FontFamily(item.Content.ToString());
                 SaveDisplaySettings();
-                UpdateCurrentPage();
+                UpdateCurrentSpread();
             }
         }
 
         private void DisplayBookContent(List<(bool isChapterStart, Paragraph paragraph)> content)
         {
             _bookContent = content ?? new List<(bool isChapterStart, Paragraph paragraph)>();
-            Debug.WriteLine($"Displaying book content. Total paragraphs: {_bookContent.Count}, Current page index: {_currentPageIndex}");
-            _currentPageIndex = Math.Max(0, Math.Min(_currentPageIndex, CalculateTotalPages() - 1));
-            ShowCurrentPage();
+            Debug.WriteLine($"Displaying book content. Total paragraphs: {_bookContent.Count}, Current spread index: {_currentSpreadIndex}");
+            _currentSpreadIndex = Math.Max(0, Math.Min(_currentSpreadIndex, CalculateTotalSpreads() - 1));
+            ShowCurrentSpread();
         }
 
-        private void ShowCurrentPage()
+        private void ShowCurrentSpread()
         {
-            PageDocument.Blocks.Clear();
+            LeftPageDocument.Blocks.Clear();
 
             if (_bookContent == null || !_bookContent.Any())
             {
@@ -337,64 +359,84 @@ namespace BookApp
                 return;
             }
 
-            double pageHeight = ActualHeight - 100; // Учитываем отступы и панель
+            double pageHeight = ActualHeight - 150; // Учитываем отступы, панель и заголовок
             double fontSize = (double)Resources["PageFontSize"];
             double lineHeight = fontSize * 1.5;
             int maxLinesPerPage = (int)(pageHeight / lineHeight);
 
-            int pageStartIndex = FindPageStartIndex(_currentPageIndex);
+            int spreadStartIndex = FindSpreadStartIndex(_currentSpreadIndex);
 
-            Debug.WriteLine($"Showing page {_currentPageIndex}. Start index: {pageStartIndex}, Max lines per page: {maxLinesPerPage}");
+            Debug.WriteLine($"Showing spread {_currentSpreadIndex}. Start index: {spreadStartIndex}, Max lines per page: {maxLinesPerPage}");
 
-            if (pageStartIndex >= _bookContent.Count)
+            if (spreadStartIndex >= _bookContent.Count)
             {
-                Debug.WriteLine("Page start index exceeds content length. Adjusting...");
-                _currentPageIndex = Math.Max(0, CalculateTotalPages() - 1);
-                pageStartIndex = FindPageStartIndex(_currentPageIndex);
+                Debug.WriteLine("Spread start index exceeds content length. Adjusting...");
+                _currentSpreadIndex = Math.Max(0, CalculateTotalSpreads() - 1);
+                spreadStartIndex = FindSpreadStartIndex(_currentSpreadIndex);
             }
 
+            // Отображаем левую страницу
             int linesAdded = 0;
-            int currentIndex = pageStartIndex;
-
+            int currentIndex = spreadStartIndex;
             while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
             {
                 var (isChapterStart, paragraph) = _bookContent[currentIndex];
                 if (isChapterStart && linesAdded > 0)
                 {
-                    Debug.WriteLine("Chapter start detected, breaking to start new page.");
-                    break; // Начинаем новую главу с новой страницы
+                    Debug.WriteLine("Chapter start detected on left page, breaking to start new page.");
+                    break;
                 }
-                int linesForParagraph = EstimateLineCount(paragraph, fontSize);
+                int linesForParagraph = EstimateLineCount(paragraph, fontSize, LeftPageViewer);
                 if (linesAdded + linesForParagraph > maxLinesPerPage && linesAdded > 0)
                 {
-                    Debug.WriteLine("Paragraph exceeds page height, breaking.");
-                    break; // Не помещается на текущей странице
+                    Debug.WriteLine("Paragraph exceeds left page height, breaking.");
+                    break;
                 }
-                PageDocument.Blocks.Add(paragraph);
+                LeftPageDocument.Blocks.Add(CloneParagraph(paragraph));
                 linesAdded += linesForParagraph;
                 currentIndex++;
             }
 
-            Debug.WriteLine($"Page {_currentPageIndex} displayed. Paragraphs added: {PageDocument.Blocks.Count}, Lines added: {linesAdded}");
+            Debug.WriteLine($"Left page of spread {_currentSpreadIndex} displayed. Paragraphs added: {LeftPageDocument.Blocks.Count}, Lines added: {linesAdded}");
         }
 
-        private int FindPageStartIndex(int pageIndex)
+        private Paragraph CloneParagraph(Paragraph original)
+        {
+            var paragraph = new Paragraph();
+            foreach (var inline in original.Inlines)
+            {
+                if (inline is Run run)
+                {
+                    var newRun = new Run(run.Text)
+                    {
+                        FontWeight = run.FontWeight,
+                        FontStyle = run.FontStyle,
+                        Foreground = run.Foreground
+                    };
+                    paragraph.Inlines.Add(newRun);
+                }
+            }
+            return paragraph;
+        }
+
+        private int FindSpreadStartIndex(int spreadIndex)
         {
             if (_bookContent == null || !_bookContent.Any())
             {
-                Debug.WriteLine("No content for page indexing.");
+                Debug.WriteLine("No content for spread indexing.");
                 return 0;
             }
 
-            int totalPages = 0;
+            int totalSpreads = 0;
             int currentIndex = 0;
-            double pageHeight = ActualHeight - 100;
+            double pageHeight = ActualHeight - 150;
             double fontSize = (double)Resources["PageFontSize"];
             double lineHeight = fontSize * 1.5;
             int maxLinesPerPage = (int)(pageHeight / lineHeight);
 
-            while (currentIndex < _bookContent.Count && totalPages < pageIndex)
+            while (currentIndex < _bookContent.Count && totalSpreads < spreadIndex)
             {
+                // Левая страница
                 int linesAdded = 0;
                 while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
                 {
@@ -403,7 +445,7 @@ namespace BookApp
                     {
                         break;
                     }
-                    int linesForParagraph = EstimateLineCount(paragraph, fontSize);
+                    int linesForParagraph = EstimateLineCount(paragraph, fontSize, LeftPageViewer);
                     if (linesAdded + linesForParagraph > maxLinesPerPage && linesAdded > 0)
                     {
                         break;
@@ -411,30 +453,31 @@ namespace BookApp
                     linesAdded += linesForParagraph;
                     currentIndex++;
                 }
-                totalPages++;
+                totalSpreads++;
             }
 
-            Debug.WriteLine($"Page {pageIndex} starts at index {currentIndex}. Total pages so far: {totalPages}");
+            Debug.WriteLine($"Spread {spreadIndex} starts at index {currentIndex}. Total spreads so far: {totalSpreads}");
             return currentIndex;
         }
 
-        private int CalculateTotalPages()
+        private int CalculateTotalSpreads()
         {
             if (_bookContent == null || !_bookContent.Any())
             {
-                Debug.WriteLine("No content to calculate pages.");
+                Debug.WriteLine("No content to calculate spreads.");
                 return 0;
             }
 
-            double pageHeight = ActualHeight - 100;
+            double pageHeight = ActualHeight - 150;
             double fontSize = (double)Resources["PageFontSize"];
             double lineHeight = fontSize * 1.5;
             int maxLinesPerPage = (int)(pageHeight / lineHeight);
 
-            int totalPages = 0;
+            int totalSpreads = 0;
             int currentIndex = 0;
             while (currentIndex < _bookContent.Count)
             {
+                // Левая страница
                 int linesAdded = 0;
                 while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage)
                 {
@@ -443,7 +486,7 @@ namespace BookApp
                     {
                         break;
                     }
-                    int linesForParagraph = EstimateLineCount(paragraph, fontSize);
+                    int linesForParagraph = EstimateLineCount(paragraph, fontSize, LeftPageViewer);
                     if (linesAdded + linesForParagraph > maxLinesPerPage && linesAdded > 0)
                     {
                         break;
@@ -451,14 +494,15 @@ namespace BookApp
                     linesAdded += linesForParagraph;
                     currentIndex++;
                 }
-                totalPages++;
+                
+                totalSpreads++;
             }
 
-            Debug.WriteLine($"Total pages calculated: {totalPages}");
-            return totalPages;
+            Debug.WriteLine($"Total spreads calculated: {totalSpreads}");
+            return totalSpreads;
         }
 
-        private int EstimateLineCount(Paragraph paragraph, double fontSize)
+        private int EstimateLineCount(Paragraph paragraph, double fontSize, FlowDocumentReader viewer)
         {
             var run = paragraph.Inlines.OfType<Run>().FirstOrDefault();
             if (run == null || string.IsNullOrEmpty(run.Text))
@@ -468,64 +512,82 @@ namespace BookApp
             }
             string text = run.Text;
 
-            // Используем ширину PageViewer, но проверяем, определена ли она
-            double viewerWidth = PageViewer.ActualWidth > 0 ? PageViewer.ActualWidth : 800; // 800 — примерная начальная ширина окна
-            int avgCharsPerLine = (int)((viewerWidth - 40) / (fontSize * 0.6)); // 40 — PagePadding
+            double viewerWidth = viewer.ActualWidth > 0 ? viewer.ActualWidth : 400; // Половина ширины окна по умолчанию
+            double charWidth = fontSize * 0.6; // Примерная ширина символа
+            int avgCharsPerLine = (int)((viewerWidth - 20) / charWidth); // 20 — PagePadding
             if (avgCharsPerLine <= 0)
             {
                 avgCharsPerLine = 50; // Минимальное значение для безопасности
             }
 
-            int lines = (int)Math.Ceiling((double)text.Length / avgCharsPerLine);
+            // Учитываем переносы слов
+            string[] words = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            int lines = 1;
+            int currentLineChars = 0;
+
+            foreach (var word in words)
+            {
+                int wordLength = word.Length + 1; // +1 для пробела
+                if (currentLineChars + wordLength > avgCharsPerLine)
+                {
+                    lines++;
+                    currentLineChars = wordLength;
+                }
+                else
+                {
+                    currentLineChars += wordLength;
+                }
+            }
+
             int estimatedLines = Math.Max(lines, 1);
             Debug.WriteLine($"Estimating lines for paragraph: '{text.Substring(0, Math.Min(50, text.Length))}'... Viewer width: {viewerWidth}, Avg chars per line: {avgCharsPerLine}, Lines: {estimatedLines}");
             return estimatedLines;
         }
 
-        private void PrevPage_Click(object sender, RoutedEventArgs e)
+        private void PrevSpread_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentPageIndex > 0)
+            if (_currentSpreadIndex > 0)
             {
-                _currentPageIndex--;
-                ShowCurrentPage();
-                SaveReadingProgress(_currentPageIndex);
+                _currentSpreadIndex--;
+                ShowCurrentSpread();
+                SaveReadingProgress(_currentSpreadIndex);
             }
         }
 
-        private void NextPage_Click(object sender, RoutedEventArgs e)
+        private void NextSpread_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentPageIndex + 1 < CalculateTotalPages())
+            if (_currentSpreadIndex + 1 < CalculateTotalSpreads())
             {
-                _currentPageIndex++;
-                ShowCurrentPage();
-                SaveReadingProgress(_currentPageIndex);
+                _currentSpreadIndex++;
+                ShowCurrentSpread();
+                SaveReadingProgress(_currentSpreadIndex);
             }
         }
-        
+
         private void PageViewer_Loaded(object sender, RoutedEventArgs e)
         {
             if (_bookContent != null && _bookContent.Any())
             {
                 Debug.WriteLine("PageViewer loaded, updating display...");
-                ShowCurrentPage();
+                ShowCurrentSpread();
             }
         }
-        
+
         private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             if (_bookContent != null && _bookContent.Any())
             {
                 Debug.WriteLine("Window size changed, updating display...");
-                ShowCurrentPage();
+                ShowCurrentSpread();
             }
         }
 
-        private void UpdateCurrentPage()
+        private void UpdateCurrentSpread()
         {
             if (_bookContent != null && _bookContent.Any())
             {
-                Debug.WriteLine("Updating current page...");
-                ShowCurrentPage();
+                Debug.WriteLine("Updating current spread...");
+                ShowCurrentSpread();
             }
         }
 
@@ -539,6 +601,80 @@ namespace BookApp
         {
             MessageBox.Show("Избранные книги...");
             // TODO: Реализовать отображение избранных книг
+        }
+
+        private void TableOfContents_Click(object sender, RoutedEventArgs e)
+        {
+            if (_tableOfContents == null || !_tableOfContents.Any())
+            {
+                MessageBox.Show("Оглавление отсутствует.", "Информация", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var tocWindow = new Window
+            {
+                Title = "Оглавление",
+                Width = 400,
+                Height = 500,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this
+            };
+
+            var listBox = new ListBox { Margin = new Thickness(10) };
+            foreach (var (title, index) in _tableOfContents)
+            {
+                var item = new ListBoxItem
+                {
+                    Content = title,
+                    Tag = index
+                };
+                item.Selected += (s, args) =>
+                {
+                    int paragraphIndex = (int)((ListBoxItem)s).Tag;
+                    _currentSpreadIndex = FindSpreadIndexForParagraph(paragraphIndex);
+                    ShowCurrentSpread();
+                    SaveReadingProgress(_currentSpreadIndex);
+                    tocWindow.Close();
+                };
+                listBox.Items.Add(item);
+            }
+
+            tocWindow.Content = new ScrollViewer { Content = listBox };
+            tocWindow.ShowDialog();
+        }
+
+        private int FindSpreadIndexForParagraph(int paragraphIndex)
+        {
+            int spreadIndex = 0;
+            int currentIndex = 0;
+            double pageHeight = ActualHeight - 150;
+            double fontSize = (double)Resources["PageFontSize"];
+            double lineHeight = fontSize * 1.5;
+            int maxLinesPerPage = (int)(pageHeight / lineHeight);
+
+            while (currentIndex < _bookContent.Count && currentIndex <= paragraphIndex)
+            {
+                // Левая страница
+                int linesAdded = 0;
+                while (currentIndex < _bookContent.Count && linesAdded < maxLinesPerPage && currentIndex <= paragraphIndex)
+                {
+                    var (isChapterStart, paragraph) = _bookContent[currentIndex];
+                    if (isChapterStart && linesAdded > 0)
+                    {
+                        break;
+                    }
+                    int linesForParagraph = EstimateLineCount(paragraph, fontSize, LeftPageViewer);
+                    if (linesAdded + linesForParagraph > maxLinesPerPage && linesAdded > 0)
+                    {
+                        break;
+                    }
+                    linesAdded += linesForParagraph;
+                    currentIndex++;
+                }
+                spreadIndex++;
+            }
+
+            return spreadIndex - 1;
         }
 
         private void SaveNickname_Click(object sender, RoutedEventArgs e)
