@@ -23,17 +23,34 @@ namespace BookApp
 
             var user = db.Users.FirstOrDefault(u => u.Username == LoginUsernameTextBox.Text);
 
-            if (user != null && BCrypt.Net.BCrypt.Verify(LoginPasswordBox.Password, user.PasswordHash))
+            if (user != null)
             {
-                MessageBox.Show($"Добро пожаловать, {user.Username}!", "Успешный вход", MessageBoxButton.OK, MessageBoxImage.Information);
+                Console.WriteLine($"User found: {user.Username}");
+                if (BCrypt.Net.BCrypt.Verify(LoginPasswordBox.Password, user.PasswordHash))
+                {
+                    MessageBox.Show($"Добро пожаловать, {user.Username}!", "Успешный вход", MessageBoxButton.OK, MessageBoxImage.Information);
 
-                var mainWindow = new MainWindow(user.Username);
-                mainWindow.Show();
-                this.Close();
+                    // Отладка ReadingHistory
+                    if (user.ReadingHistory != null)
+                    {
+                        foreach (var rh in user.ReadingHistory)
+                        {
+                            Console.WriteLine($"ReadingHistory.IsRead: {rh.IsRead}");
+                        }
+                    }
+
+                    var mainWindow = new MainWindow(user.Username);
+                    mainWindow.Show();
+                    this.Close();
+                }
+                else
+                {
+                    MessageBox.Show("Неверный пароль", "Ошибка входа", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
             }
             else
             {
-                MessageBox.Show("Неверное имя пользователя или пароль", "Ошибка входа", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Неверное имя пользователя", "Ошибка входа", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

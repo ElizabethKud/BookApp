@@ -71,10 +71,9 @@
                 <Setter Property="BorderBrush" Value="#888"/>
                 <Setter Property="BorderThickness" Value="1"/>
             </Style>
-            <Style TargetType="FlowDocumentPageViewer">
-                <Setter Property="MaxHeight" Value="650"/>
-                <Setter Property="MinZoom" Value="100"/>
-                <Setter Property="MaxZoom" Value="100"/>
+            <Style TargetType="FlowDocumentReader">
+                <Setter Property="MinZoom" Value="50"/>
+                <Setter Property="MaxZoom" Value="200"/>
                 <Setter Property="Zoom" Value="100"/>
             </Style>
         </ResourceDictionary>
@@ -125,8 +124,6 @@
                     <ContextMenu>
                         <TextBlock FontSize="14" TextWrapping="Wrap" Margin="5">
                             <Bold>Горячие клавиши:</Bold><LineBreak/>
-                            - <Bold>A</Bold>: Предыдущая страница<LineBreak/>
-                            - <Bold>D</Bold>: Следующая страница<LineBreak/>
                             - <Bold>Ctrl + O</Bold>: Открыть книгу<LineBreak/>
                             - <Bold>Ctrl + B</Bold>: Базовые книги<LineBreak/>
                             - <Bold>Ctrl + F</Bold>: Поиск<LineBreak/>
@@ -186,7 +183,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <FlowDocumentReader x:Name="LeftPageViewer" Grid.Column="0" HorizontalAlignment="Stretch" Loaded="PageViewer_Loaded">
+                    <FlowDocumentReader x:Name="LeftPageViewer" Grid.Column="0" HorizontalAlignment="Stretch" Loaded="PageViewer_Loaded" ViewingMode="Page">
                         <FlowDocument x:Name="LeftPageDocument"
                                       Background="{DynamicResource PageBackground}"
                                       Foreground="{DynamicResource PageForeground}"
@@ -195,10 +192,9 @@
                                       PagePadding="10"
                                       TextAlignment="Justify"
                                       LineHeight="1.5"
-                                      IsHyphenationEnabled="True"
-                                      IsColumnWidthFlexible="False"
                                       ColumnWidth="1500"
-                                      ColumnGap="5"/>
+                                      IsHyphenationEnabled="True"
+                                      IsColumnWidthFlexible="True"/>
                     </FlowDocumentReader>
                 </Grid>
             </Border>

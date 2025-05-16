@@ -66,7 +66,7 @@ namespace BookApp.Data
                 entity.Property(b => b.PagesCount).HasColumnName("pages_count");
                 entity.Property(b => b.Language).HasColumnName("language");
                 entity.Property(b => b.FilePath).HasColumnName("file_path");
-                entity.Property(b => b.IsDefault).HasColumnName("is_default").HasDefaultValue(false); // Новая колонка
+                entity.Property(b => b.IsDefault).HasColumnName("is_default").HasDefaultValue(false);
                 
                 entity.Property(b => b.PublicationYear).IsRequired(false);
                 entity.Property(b => b.PagesCount).IsRequired(false);
@@ -188,7 +188,9 @@ namespace BookApp.Data
                 entity.Property(r => r.UserId).HasColumnName("user_id");
                 entity.Property(r => r.BookId).HasColumnName("book_id");
                 entity.Property(r => r.LastReadPage).HasColumnName("last_read_page");
+                entity.Property(r => r.LastReadPosition).HasColumnName("last_read_position");
                 entity.Property(r => r.LastReadDate).HasColumnName("last_read_date");
+                entity.Property(r => r.IsRead).HasColumnName("is_read"); // Явное сопоставление с is_read
                 
                 entity.HasOne(r => r.User)
                     .WithMany(u => u.ReadingHistory)

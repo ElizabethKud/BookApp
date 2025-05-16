@@ -10,6 +10,7 @@
 
     <ItemGroup>
       <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+      <PackageReference Include="itext7" Version="9.2.0" />
       <PackageReference Include="MaterialDesignColors" Version="5.2.0" />
       <PackageReference Include="MaterialDesignExtensions" Version="4.0.0-a02" />
       <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />

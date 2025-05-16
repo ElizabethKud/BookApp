@@ -1,7 +1,7 @@
 ﻿<Window x:Class="BookApp.Views.DefaultBooksWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:local="clr-namespace:BookApp"
+        xmlns:local="clr-namespace:BookApp.Views"
         xmlns:services="clr-namespace:BookApp.Services"
         Title="Базовые книги" Height="400" Width="600"
         Background="#F0F0F0"
@@ -9,6 +9,7 @@
     <Window.Resources>
         <services:AuthorNameConverter x:Key="AuthorNameConverter"/>
         <services:AverageRatingConverter x:Key="AverageRatingConverter"/>
+        <services:IsReadConverter x:Key="IsReadConverter"/>
         <Style TargetType="Button">
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Padding" Value="10,5"/>
@@ -67,7 +68,6 @@
             <Setter Property="BorderBrush" Value="#888"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="AutoGenerateColumns" Value="False"/>
-            <Setter Property="IsReadOnly" Value="True"/>
         </Style>
     </Window.Resources>
     <Grid Margin="10">
@@ -80,12 +80,22 @@
                 <DataGridTextColumn Header="Название" Binding="{Binding Title}" Width="*"/>
                 <DataGridTextColumn Header="Автор" Binding="{Binding BookAuthors, Converter={StaticResource AuthorNameConverter}}" Width="*"/>
                 <DataGridTextColumn Header="Рейтинг" Binding="{Binding Ratings, Converter={StaticResource AverageRatingConverter}}" Width="Auto"/>
+                <DataGridTemplateColumn Header="Прочитано" Width="Auto">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding ReadingHistory, Converter={StaticResource IsReadConverter}, ConverterParameter={x:Static local:DefaultBooksWindow.CurrentUserId}}"
+                                      Checked="CheckBox_Checked"
+                                      Unchecked="CheckBox_Unchecked"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTemplateColumn Header="Действия" Width="Auto">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal">
                                 <Button Content="Открыть" Click="OpenBook_Click" Tag="{Binding}"/>
                                 <Button Content="Оценить" Click="RateBook_Click" Tag="{Binding}"/>
+                                <Button Content="В избранное" Click="AddToFavorites_Click" Tag="{Binding}"/>
                             </StackPanel>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>

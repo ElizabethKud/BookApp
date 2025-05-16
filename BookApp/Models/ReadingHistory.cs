@@ -6,9 +6,10 @@ public class ReadingHistory
     public int UserId { get; set; }
     public int BookId { get; set; }
     public int? LastReadPage { get; set; }
+    public string LastReadPosition { get; set; }
     public DateTime LastReadDate { get; set; }
+    public bool IsRead { get; set; }
 
-    // Навигационные свойства
     public virtual User User { get; set; }
     public virtual Book Book { get; set; }
 }

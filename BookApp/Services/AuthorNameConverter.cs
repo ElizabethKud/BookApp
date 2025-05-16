@@ -11,13 +11,14 @@ namespace BookApp.Services
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is ICollection<BookAuthor> bookAuthors && bookAuthors.Any())
+            if (value is IEnumerable<BookAuthor> bookAuthors && bookAuthors.Any())
             {
                 var authorNames = bookAuthors
                     .Select(ba => ba.Author)
                     .Where(a => a != null)
-                    .Select(a => $"{a.LastName} {a.FirstName} {a.MiddleName}".Trim());
-                return string.Join(", ", authorNames);
+                    .Select(a => string.Join(" ", new[] { a.LastName, a.FirstName, a.MiddleName }.Where(s => !string.IsNullOrEmpty(s))))
+                    .Where(name => !string.IsNullOrEmpty(name));
+                return string.Join(", ", authorNames) is string result && !string.IsNullOrEmpty(result) ? result : "Неизвестный автор";
             }
             return "Неизвестный автор";
         }
