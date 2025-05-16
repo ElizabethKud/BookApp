@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -26,12 +27,6 @@ namespace BookApp.Services
             };
         }
 
-        private string StripHtml(string html)
-        {
-            var text = Regex.Replace(html, "<.*?>", string.Empty);
-            return System.Net.WebUtility.HtmlDecode(text);
-        }
-
         private List<(bool isChapterStart, Paragraph paragraph)> ParseEpub(string filePath)
         {
             var content = new List<(bool isChapterStart, Paragraph paragraph)>();
@@ -56,17 +51,18 @@ namespace BookApp.Services
                 {
                     try
                     {
-                        var text = StripHtml(navItem.HtmlContentFile.Content);
-                        var lines = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+                        var htmlContent = navItem.HtmlContentFile.Content;
+                        var paragraphs = Regex.Split(htmlContent, @"(?<=</p>)").Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
 
-                        foreach (var line in lines)
+                        foreach (var p in paragraphs)
                         {
-                            var trimmedLine = line.Trim();
-                            if (!string.IsNullOrWhiteSpace(trimmedLine) && !processedTitles.Contains(trimmedLine + depth))
+                            var text = StripHtml(p).Trim();
+                            if (!string.IsNullOrWhiteSpace(text))
                             {
-                                var paragraph = new Paragraph(new Run(trimmedLine))
+                                var paragraph = new Paragraph(new Run(text))
                                 {
-                                    Margin = new Thickness(0, 0, 0, 10)
+                                    Margin = new Thickness(0, 0, 0, 10),
+                                    TextIndent = 20 // Красная строка
                                 };
                                 content.Add((false, paragraph));
                             }
@@ -89,32 +85,48 @@ namespace BookApp.Services
                 ProcessNavigationItem(navItem);
             }
 
-            if (!content.Any())
+            if (!content.Any() && epubBook.ReadingOrder.Any())
             {
                 foreach (var textFile in epubBook.ReadingOrder)
                 {
-                    var text = StripHtml(textFile.Content);
-                    var lines = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+                    var htmlContent = textFile.Content;
+                    var paragraphs = Regex.Split(htmlContent, @"(?<=</p>)").Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
 
-                    foreach (var line in lines)
+                    foreach (var p in paragraphs)
                     {
-                        var trimmedLine = line.Trim();
+                        var trimmedLine = StripHtml(p).Trim();
                         if (!string.IsNullOrWhiteSpace(trimmedLine))
                         {
                             var isChapterStart = Regex.IsMatch(trimmedLine, @"^(Глава|Chapter)\s", RegexOptions.IgnoreCase);
+                            if (isChapterStart && processedTitles.Contains(trimmedLine))
+                            {
+                                continue;
+                            }
                             var paragraph = new Paragraph(new Run(trimmedLine))
                             {
                                 FontWeight = isChapterStart ? FontWeights.Bold : FontWeights.Normal,
                                 FontSize = isChapterStart ? 20 : 16,
-                                Margin = new Thickness(0, isChapterStart ? 10 : 0, 0, 10)
+                                Margin = new Thickness(0, isChapterStart ? 10 : 0, 0, 10),
+                                TextIndent = isChapterStart ? 0 : 20 // Красная строка для обычных абзацев
                             };
                             content.Add((isChapterStart, paragraph));
+                            if (isChapterStart)
+                            {
+                                processedTitles.Add(trimmedLine);
+                            }
                         }
                     }
                 }
             }
 
+            Debug.WriteLine($"Parsed EPUB content. Total paragraphs: {content.Count}, Chapters: {content.Count(c => c.isChapterStart)}");
             return content;
+        }
+
+        private string StripHtml(string html)
+        {
+            var text = Regex.Replace(html, "<.*?>", string.Empty);
+            return System.Net.WebUtility.HtmlDecode(text);
         }
 
         private List<(bool isChapterStart, Paragraph paragraph)> ParseFb2(string filePath)
@@ -122,6 +134,7 @@ namespace BookApp.Services
             var content = new List<(bool isChapterStart, Paragraph paragraph)>();
             var doc = XDocument.Load(filePath);
             var body = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "body");
+            var processedTitles = new HashSet<string>();
 
             if (body != null)
             {
@@ -132,7 +145,7 @@ namespace BookApp.Services
                     if (title != null)
                     {
                         var titleText = StripHtml(title.Value);
-                        if (!string.IsNullOrWhiteSpace(titleText))
+                        if (!string.IsNullOrWhiteSpace(titleText) && !processedTitles.Contains(titleText))
                         {
                             var titleParagraph = new Paragraph(new Run(titleText.Trim()))
                             {
@@ -141,6 +154,7 @@ namespace BookApp.Services
                                 Margin = new Thickness(0, 10, 0, 10)
                             };
                             content.Add((true, titleParagraph));
+                            processedTitles.Add(titleText);
                         }
                     }
 
@@ -152,7 +166,8 @@ namespace BookApp.Services
                         {
                             var paragraph = new Paragraph(new Run(text.Trim()))
                             {
-                                Margin = new Thickness(0, 0, 0, 10)
+                                Margin = new Thickness(0, 0, 0, 10),
+                                TextIndent = 20 // Красная строка
                             };
                             content.Add((false, paragraph));
                         }
@@ -160,6 +175,7 @@ namespace BookApp.Services
                 }
             }
 
+            Debug.WriteLine($"Parsed FB2 content. Total paragraphs: {content.Count}, Chapters: {content.Count(c => c.isChapterStart)}");
             return content;
         }
 
@@ -167,6 +183,7 @@ namespace BookApp.Services
         {
             var content = new List<(bool isChapterStart, Paragraph paragraph)>();
             using var document = PdfDocument.Load(filePath);
+            var processedTitles = new HashSet<string>();
 
             for (int i = 0; i < document.PageCount; i++)
             {
@@ -183,13 +200,23 @@ namespace BookApp.Services
                         {
                             text = currentParagraphText.ToString().Trim();
                             var isChapterStart = Regex.IsMatch(text, @"^(Глава|Chapter)\s", RegexOptions.IgnoreCase);
+                            if (isChapterStart && processedTitles.Contains(text))
+                            {
+                                currentParagraphText.Clear();
+                                continue;
+                            }
                             var paragraph = new Paragraph(new Run(text))
                             {
                                 FontWeight = isChapterStart ? FontWeights.Bold : FontWeights.Normal,
                                 FontSize = isChapterStart ? 20 : 16,
-                                Margin = new Thickness(0, isChapterStart ? 10 : 0, 0, 10)
+                                Margin = new Thickness(0, isChapterStart ? 10 : 0, 0, 10),
+                                TextIndent = isChapterStart ? 0 : 20 // Красная строка для обычных абзацев
                             };
                             content.Add((isChapterStart, paragraph));
+                            if (isChapterStart)
+                            {
+                                processedTitles.Add(text);
+                            }
                             currentParagraphText.Clear();
                         }
                     }
@@ -203,16 +230,26 @@ namespace BookApp.Services
                 {
                     text = currentParagraphText.ToString().Trim();
                     var isChapterStart = Regex.IsMatch(text, @"^(Глава|Chapter)\s", RegexOptions.IgnoreCase);
+                    if (isChapterStart && processedTitles.Contains(text))
+                    {
+                        continue;
+                    }
                     var paragraph = new Paragraph(new Run(text))
                     {
                         FontWeight = isChapterStart ? FontWeights.Bold : FontWeights.Normal,
                         FontSize = isChapterStart ? 20 : 16,
-                        Margin = new Thickness(0, isChapterStart ? 10 : 0, 0, 10)
+                        Margin = new Thickness(0, isChapterStart ? 10 : 0, 0, 10),
+                        TextIndent = isChapterStart ? 0 : 20 // Красная строка для обычных абзацев
                     };
                     content.Add((isChapterStart, paragraph));
+                    if (isChapterStart)
+                    {
+                        processedTitles.Add(text);
+                    }
                 }
             }
 
+            Debug.WriteLine($"Parsed PDF content. Total paragraphs: {content.Count}, Chapters: {content.Count(c => c.isChapterStart)}");
             return content;
         }
     }
