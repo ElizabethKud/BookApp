@@ -63,14 +63,6 @@
                     </Setter.Value>
                 </Setter>
             </Style>
-            <Style TargetType="ComboBox">
-                <Setter Property="FontSize" Value="14"/>
-                <Setter Property="Padding" Value="8,5"/>
-                <Setter Property="Margin" Value="5"/>
-                <Setter Property="Background" Value="#FFFFFF"/>
-                <Setter Property="BorderBrush" Value="#888"/>
-                <Setter Property="BorderThickness" Value="1"/>
-            </Style>
             <Style TargetType="TextBox">
                 <Setter Property="FontSize" Value="14"/>
                 <Setter Property="Padding" Value="8,5"/>
@@ -79,12 +71,8 @@
                 <Setter Property="BorderBrush" Value="#888"/>
                 <Setter Property="BorderThickness" Value="1"/>
             </Style>
-            <Style TargetType="Slider">
-                <Setter Property="Width" Value="200"/>
-                <Setter Property="Margin" Value="5"/>
-            </Style>
             <Style TargetType="FlowDocumentPageViewer">
-                <Setter Property="MaxHeight" Value="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=ActualHeight}"/>
+                <Setter Property="MaxHeight" Value="650"/>
                 <Setter Property="MinZoom" Value="100"/>
                 <Setter Property="MaxZoom" Value="100"/>
                 <Setter Property="Zoom" Value="100"/>
@@ -93,62 +81,31 @@
     </Window.Resources>
     <DockPanel>
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="#E0E0E0" Height="40">
-            <Button Content="Оформление" Margin="5">
-                <Button.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem Header="Цвет фона">
-                            <ComboBox x:Name="BackgroundColorComboBox" SelectionChanged="BackgroundColorComboBox_SelectionChanged">
-                                <ComboBoxItem Content="Белый" Tag="#FFFFFF"/>
-                                <ComboBoxItem Content="Черный" Tag="#000000"/>
-                                <ComboBoxItem Content="Серый" Tag="#D3D3D3"/>
-                                <ComboBoxItem Content="Сепия" Tag="#F4ECD8"/>
-                                <ComboBoxItem Content="Темно-синий" Tag="#1E3A5F"/>
-                            </ComboBox>
-                        </MenuItem>
-                        <MenuItem Header="Цвет шрифта">
-                            <ComboBox x:Name="FontColorComboBox" SelectionChanged="FontColorComboBox_SelectionChanged">
-                                <ComboBoxItem Content="Черный" Tag="#000000"/>
-                                <ComboBoxItem Content="Белый" Tag="#FFFFFF"/>
-                                <ComboBoxItem Content="Серый" Tag="#666666"/>
-                                <ComboBoxItem Content="Коричневый" Tag="#5C4033"/>
-                            </ComboBox>
-                        </MenuItem>
-                        <MenuItem Header="Размер шрифта">
-                            <Slider Minimum="8" Maximum="30" x:Name="FontSizeSlider" ValueChanged="FontSizeSlider_ValueChanged" Width="150"/>
-                        </MenuItem>
-                        <MenuItem Header="Шрифт">
-                            <ComboBox x:Name="FontFamilyComboBox" SelectionChanged="FontFamilyComboBox_SelectionChanged">
-                                <ComboBoxItem Content="Arial"/>
-                                <ComboBoxItem Content="Times New Roman"/>
-                                <ComboBoxItem Content="Segoe UI"/>
-                                <ComboBoxItem Content="Calibri"/>
-                                <ComboBoxItem Content="Georgia"/>
-                                <ComboBoxItem Content="Verdana"/>
-                            </ComboBox>
-                        </MenuItem>
-                    </ContextMenu>
-                </Button.ContextMenu>
-                <Button.Triggers>
-                    <EventTrigger RoutedEvent="Button.Click">
-                        <BeginStoryboard>
-                            <Storyboard>
-                                <BooleanAnimationUsingKeyFrames Storyboard.TargetProperty="ContextMenu.IsOpen">
-                                    <DiscreteBooleanKeyFrame KeyTime="0:0:0" Value="True"/>
-                                </BooleanAnimationUsingKeyFrames>
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </EventTrigger>
-                </Button.Triggers>
-            </Button>
             <Button Content="Настройки" Margin="5">
                 <Button.ContextMenu>
                     <ContextMenu>
-                        <MenuItem Header="Ник">
-                            <TextBox x:Name="NicknameTextBox" Width="150"/>
+                        <MenuItem Header="Цвет фона">
+                            <MenuItem Header="Белый" Tag="#FFFFFF" Click="BackgroundColorMenuItem_Click"/>
+                            <MenuItem Header="Черный" Tag="#000000" Click="BackgroundColorMenuItem_Click"/>
+                            <MenuItem Header="Серый" Tag="#D3D3D3" Click="BackgroundColorMenuItem_Click"/>
+                            <MenuItem Header="Сепия" Tag="#F4ECD8" Click="BackgroundColorMenuItem_Click"/>
+                            <MenuItem Header="Темно-синий" Tag="#1E3A5F" Click="BackgroundColorMenuItem_Click"/>
                         </MenuItem>
-                        <MenuItem>
-                            <Button Content="Сохранить" Click="SaveNickname_Click"/>
+                        <MenuItem Header="Цвет шрифта">
+                            <MenuItem Header="Черный" Tag="#000000" Click="FontColorMenuItem_Click"/>
+                            <MenuItem Header="Белый" Tag="#FFFFFF" Click="FontColorMenuItem_Click"/>
+                            <MenuItem Header="Серый" Tag="#666666" Click="FontColorMenuItem_Click"/>
+                            <MenuItem Header="Коричневый" Tag="#5C4033" Click="FontColorMenuItem_Click"/>
                         </MenuItem>
+                        <MenuItem Header="Шрифт">
+                            <MenuItem Header="Arial" Click="FontFamilyMenuItem_Click"/>
+                            <MenuItem Header="Times New Roman" Click="FontFamilyMenuItem_Click"/>
+                            <MenuItem Header="Segoe UI" Click="FontFamilyMenuItem_Click"/>
+                            <MenuItem Header="Calibri" Click="FontFamilyMenuItem_Click"/>
+                            <MenuItem Header="Georgia" Click="FontFamilyMenuItem_Click"/>
+                            <MenuItem Header="Verdana" Click="FontFamilyMenuItem_Click"/>
+                        </MenuItem>
+                        <MenuItem Header="Смена ника" Click="ChangeNickname_Click"/>
                     </ContextMenu>
                 </Button.ContextMenu>
                 <Button.Triggers>
@@ -166,15 +123,15 @@
             <Button Content="Управление" Margin="5">
                 <Button.ContextMenu>
                     <ContextMenu>
-                        <MenuItem>
-                            <TextBlock FontSize="14" TextWrapping="Wrap">
-                                <Bold>Горячие клавиши:</Bold><LineBreak/>
-                                - <Bold>A</Bold>: Предыдущая страница<LineBreak/>
-                                - <Bold>D</Bold>: Следующая страница<LineBreak/>
-                                - <Bold>Ctrl + O</Bold>: Открыть книгу<LineBreak/>
-                                - <Bold>Esc</Bold>: Выход из приложения
-                            </TextBlock>
-                        </MenuItem>
+                        <TextBlock FontSize="14" TextWrapping="Wrap" Margin="5">
+                            <Bold>Горячие клавиши:</Bold><LineBreak/>
+                            - <Bold>A</Bold>: Предыдущая страница<LineBreak/>
+                            - <Bold>D</Bold>: Следующая страница<LineBreak/>
+                            - <Bold>Ctrl + O</Bold>: Открыть книгу<LineBreak/>
+                            - <Bold>Ctrl + B</Bold>: Базовые книги<LineBreak/>
+                            - <Bold>Ctrl + F</Bold>: Поиск<LineBreak/>
+                            - <Bold>Esc</Bold>: Выход из приложения
+                        </TextBlock>
                     </ContextMenu>
                 </Button.ContextMenu>
                 <Button.Triggers>
@@ -212,14 +169,15 @@
                 </Button.Triggers>
             </Button>
         </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Background="#E0E0E0" Height="30" VerticalAlignment="Center">
+            <TextBlock x:Name="BookProgressText" Margin="10,0" VerticalAlignment="Center" FontSize="12"/>
+        </StackPanel>
         <Grid Margin="20">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-            <!-- Заголовок книги -->
             <TextBlock x:Name="BookTitleTextBlock" Grid.Row="0" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,10" Visibility="Collapsed"/>
-            <!-- Разворот -->
             <Border Grid.Row="1" Background="White" BorderBrush="#D3D3D3" BorderThickness="1" CornerRadius="5" Padding="10">
                 <Border.Effect>
                     <DropShadowEffect Color="Gray" Direction="315" ShadowDepth="5" Opacity="0.5"/>
@@ -228,7 +186,6 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <!-- Левая страница -->
                     <FlowDocumentReader x:Name="LeftPageViewer" Grid.Column="0" HorizontalAlignment="Stretch" Loaded="PageViewer_Loaded">
                         <FlowDocument x:Name="LeftPageDocument"
                                       Background="{DynamicResource PageBackground}"
