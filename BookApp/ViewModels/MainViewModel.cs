@@ -1,6 +1,6 @@
 ﻿namespace BookApp.ViewModels;
 
-public class BaseViewModel
+public class MainViewModel
 {
     
 }

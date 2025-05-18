@@ -248,16 +248,22 @@ namespace BookApp
                     _bookContent.Insert(1, (false, false, true, tocSection));
                 }
 
+                Debug.WriteLine("Перед отображением книги...");
                 DisplayBookContent();
 
                 BookTitleTextBlock.Text = book.Title;
                 BookTitleTextBlock.Visibility = Visibility.Visible;
 
-                _currentReadingHistory = db.ReadingHistory
-                    .FirstOrDefault(rh => rh.UserId == _currentUserId && rh.BookId == book.Id);
+                _currentReadingHistory = db.ReadingHistory.FirstOrDefault(rh => rh.UserId == _currentUserId && rh.BookId == book.Id);
                 if (_currentReadingHistory != null && !string.IsNullOrEmpty(_currentReadingHistory.LastReadPosition))
                 {
+                    Debug.WriteLine($"Найдена сохраненная позиция чтения: {_currentReadingHistory.LastReadPosition}");
                     RestoreReadingPosition(_currentReadingHistory.LastReadPosition);
+                }
+                else
+                {
+                    Debug.WriteLine("Сохраненная позиция чтения отсутствует, книга должна открыться с начала.");
+                    ScrollToStartWithRetries();
                 }
 
                 UpdateProgressDisplay();
@@ -270,6 +276,47 @@ namespace BookApp
             }
         }
 
+        private async void ScrollToStartWithRetries(int maxRetries = 3, int delayMs = 200)
+        {
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            {
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    var firstBlock = LeftPageDocument.Blocks.FirstOrDefault();
+                    if (firstBlock != null)
+                    {
+                        firstBlock.BringIntoView();
+                        var viewer = FindScrollViewer(LeftPageViewer);
+                        if (viewer != null)
+                        {
+                            viewer.ScrollToTop();
+                            Debug.WriteLine($"Попытка {attempt}: ScrollViewer прокручен в начало. VerticalOffset = {viewer.VerticalOffset}");
+                            // Проверяем, действительно ли прокрутка удалась
+                            if (viewer.VerticalOffset > 0)
+                            {
+                                Debug.WriteLine($"Попытка {attempt}: VerticalOffset не 0, повторная прокрутка...");
+                                viewer.ScrollToTop();
+                            }
+                        }
+                        else
+                        {
+                            Debug.WriteLine($"Попытка {attempt}: ScrollViewer не найден в OpenBook.");
+                        }
+                    }
+                    else
+                    {
+                        Debug.WriteLine($"Попытка {attempt}: Первый блок документа не найден в OpenBook.");
+                    }
+                }, DispatcherPriority.Render);
+
+                // Задержка перед следующей попыткой
+                if (attempt < maxRetries)
+                {
+                    await Task.Delay(delayMs);
+                }
+            }
+        }
+        
         private void Hyperlink_RequestNavigate(object sender, RequestNavigateEventArgs e)
         {
             if (sender is Hyperlink hyperlink)
@@ -355,80 +402,141 @@ namespace BookApp
             }
         }
 
-        private void RestoreReadingPosition(string positionStr)
+        private async void RestoreReadingPosition(string positionStr)
         {
-            if (string.IsNullOrEmpty(positionStr) || !int.TryParse(positionStr, out int offset))
+            if (string.IsNullOrEmpty(positionStr))
             {
-                // Прокручиваем к началу документа
-                var firstBlock = LeftPageDocument.Blocks.FirstOrDefault();
-                if (firstBlock != null)
-                {
-                    firstBlock.BringIntoView();
-                    var viewer = LeftPageViewer.Template.FindName("PART_ContentHost", LeftPageViewer) as ScrollViewer;
-                    viewer?.ScrollToTop();
-                }
+                Debug.WriteLine("Позиция не указана, прокрутка к началу.");
+                ScrollToStartWithRetries();
                 return;
             }
 
-            try
+            Dispatcher.InvokeAsync(() =>
             {
-                TextPointer position = LeftPageDocument.ContentStart.GetPositionAtOffset(offset);
-                if (position != null)
+                try
                 {
-                    var viewer = LeftPageViewer.Template.FindName("PART_ContentHost", LeftPageViewer) as ScrollViewer;
+                    if (!int.TryParse(positionStr, out int offset))
+                    {
+                        Debug.WriteLine("Некорректный формат позиции, прокрутка к началу.");
+                        ScrollToStartWithRetries();
+                        return;
+                    }
+
+                    var document = LeftPageDocument;
+                    var position = document.ContentStart.GetPositionAtOffset(offset);
+                    if (position == null)
+                    {
+                        Debug.WriteLine($"Позиция с offset {offset} не найдена, прокрутка к началу.");
+                        ScrollToStartWithRetries();
+                        return;
+                    }
+
+                    // Прокрутка к сохраненной позиции
+                    position.Paragraph?.BringIntoView();
+                    var viewer = FindScrollViewer(LeftPageViewer);
                     if (viewer != null)
                     {
-                        position.Paragraph?.BringIntoView();
-                        viewer.ScrollToVerticalOffset(0); // Устанавливаем скролл в начало страницы
-                        viewer.ScrollToHome();
+                        var rect = position.GetCharacterRect(LogicalDirection.Forward);
+                        viewer.ScrollToVerticalOffset(rect.Top);
+                        Debug.WriteLine($"Позиция восстановлена: offset = {offset}, VerticalOffset = {viewer.VerticalOffset}");
                     }
+                    else
+                    {
+                        Debug.WriteLine("ScrollViewer не найден, прокрутка к началу.");
+                        ScrollToStartWithRetries();
+                    }
+
+                    // Перезапуск таймера для сохранения позиции
+                    if (_positionSaveTimer != null)
+                    {
+                        _positionSaveTimer.Stop();
+                        _positionSaveTimer.Start();
+                        Debug.WriteLine("Таймер перезапущен для сохранения позиции.");
+                    }
+                    else
+                    {
+                        Debug.WriteLine("Таймер не инициализирован.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Ошибка восстановления позиции: {ex.Message}");
+                    ScrollToStartWithRetries();
+                }
+            }, DispatcherPriority.Render);
+        }
+
+        private void ScrollToStart()
+        {
+            var firstBlock = LeftPageDocument.Blocks.FirstOrDefault();
+            if (firstBlock != null)
+            {
+                firstBlock.BringIntoView();
+                var viewer = FindScrollViewer(LeftPageViewer);
+                if (viewer != null)
+                {
+                    viewer.ScrollToTop();
+                    Debug.WriteLine("Прокрутка к началу выполнена.");
                 }
                 else
                 {
-                    var firstBlock = LeftPageDocument.Blocks.FirstOrDefault();
-                    if (firstBlock != null)
-                    {
-                        firstBlock.BringIntoView();
-                        var viewer = LeftPageViewer.Template.FindName("PART_ContentHost", LeftPageViewer) as ScrollViewer;
-                        viewer?.ScrollToTop();
-                    }
+                    Debug.WriteLine("ScrollViewer не найден для прокрутки к началу.");
                 }
             }
-            catch (Exception ex)
+            else
             {
-                Debug.WriteLine($"Ошибка восстановления позиции чтения: {ex.Message}");
-                var firstBlock = LeftPageDocument.Blocks.FirstOrDefault();
-                if (firstBlock != null)
-                {
-                    firstBlock.BringIntoView();
-                    var viewer = LeftPageViewer.Template.FindName("PART_ContentHost", LeftPageViewer) as ScrollViewer;
-                    viewer?.ScrollToTop();
-                }
+                Debug.WriteLine("Первый блок документа не найден.");
             }
+        }
+
+        private ScrollViewer FindScrollViewer(DependencyObject parent)
+        {
+            if (parent == null) return null;
+    
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is ScrollViewer scrollViewer)
+                {
+                    return scrollViewer;
+                }
+                var result = FindScrollViewer(child);
+                if (result != null) return result;
+            }
+            return null;
         }
 
         private TextPointer GetCurrentPosition()
         {
-            var viewer = LeftPageViewer.Template.FindName("PART_ContentHost", LeftPageViewer) as ScrollViewer;
-            if (viewer != null)
+            var viewer = FindScrollViewer(LeftPageViewer);
+            if (viewer == null) return LeftPageDocument.ContentStart;
+
+            var offset = viewer.VerticalOffset;
+            var viewportHeight = viewer.ViewportHeight;
+
+            TextPointer currentPosition = LeftPageDocument.ContentStart;
+            TextPointer closestPosition = LeftPageDocument.ContentStart;
+            double closestDifference = double.MaxValue;
+
+            while (currentPosition != null && currentPosition.CompareTo(LeftPageDocument.ContentEnd) < 0)
             {
-                var document = LeftPageDocument;
-                var range = new TextRange(document.ContentStart, document.ContentEnd);
-                var rect = viewer.TransformToAncestor(LeftPageViewer).TransformBounds(new Rect(0, 0, viewer.ViewportWidth, viewer.ViewportHeight));
-                foreach (Block block in document.Blocks)
+                var rect = currentPosition.GetCharacterRect(LogicalDirection.Forward);
+                if (rect.IsEmpty) continue;
+
+                double difference = Math.Abs(rect.Top - offset);
+                if (difference < closestDifference)
                 {
-                    if (block is Paragraph paragraph)
-                    {
-                        var paragraphRange = new TextRange(paragraph.ContentStart, paragraph.ContentEnd);
-                        var paragraphRect = paragraph.ContentStart.GetCharacterRect(LogicalDirection.Forward);
-                        if (rect.Contains(paragraphRect.TopLeft) || rect.Contains(paragraphRect.BottomRight))
-                        {
-                            return paragraph.ContentStart;
-                        }
-                    }
+                    closestDifference = difference;
+                    closestPosition = currentPosition;
                 }
+
+                if (rect.Top > offset + viewportHeight)
+                    break;
+
+                currentPosition = currentPosition.GetNextInsertionPosition(LogicalDirection.Forward);
             }
-            return LeftPageDocument.ContentStart;
+
+            return closestPosition;
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
@@ -576,14 +684,6 @@ namespace BookApp
         {
             LeftPageDocument.Blocks.Clear();
 
-            if (_bookContent == null || !_bookContent.Any())
-            {
-                Debug.WriteLine("Нет содержимого для отображения.");
-                return;
-            }
-
-            Debug.WriteLine($"Отображение содержимого книги. Всего блоков: {_bookContent.Count}");
-
             foreach (var (isChapterStart, isTitle, isToc, block) in _bookContent)
             {
                 if (block is Paragraph paragraph)
@@ -598,6 +698,8 @@ namespace BookApp
                 }
             }
 
+            // Принудительное обновление layout перед восстановлением позиции
+            LeftPageViewer.UpdateLayout();
             UpdateProgressDisplay();
         }
 
@@ -667,6 +769,7 @@ namespace BookApp
             if (_currentBook == null || _bookContent == null || !_bookContent.Any())
             {
                 BookProgressText.Text = "";
+                Debug.WriteLine("UpdateProgressDisplay: книга или содержимое отсутствуют.");
                 return;
             }
 
@@ -678,6 +781,9 @@ namespace BookApp
             double progress = totalLength > 0 ? (double)currentOffset / totalLength * 100 : 0;
             int estimatedPage = EstimateCurrentPage(currentPosition);
             int totalPages = _currentBook.PagesCount ?? totalLength; // Используем totalLength как резерв
+
+            Debug.WriteLine($"UpdateProgressDisplay: currentOffset = {currentOffset}, totalLength = {totalLength}, progress = {progress:F1}%, estimatedPage = {estimatedPage}, totalPages = {totalPages}");
+
             BookProgressText.Text = $"Страница: {Math.Max(1, estimatedPage)}/{Math.Max(1, totalPages)} ({progress:F1}%)";
         }
         
@@ -699,9 +805,11 @@ namespace BookApp
         {
             if (_bookContent != null && _bookContent.Any())
             {
-                Debug.WriteLine("PageViewer загружен, обновление отображения...");
-                DisplayBookContent();
-                UpdateProgressDisplay();
+                Debug.WriteLine("PageViewer загружен, содержимое присутствует.");
+            }
+            else
+            {
+                Debug.WriteLine("Содержимое книги отсутствует в PageViewer_Loaded.");
             }
         }
 

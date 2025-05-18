@@ -165,6 +165,8 @@
                     </EventTrigger>
                 </Button.Triggers>
             </Button>
+            <Button Content="Закладки" Margin="5">
+            </Button>
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Background="#E0E0E0" Height="30" VerticalAlignment="Center">
             <TextBlock x:Name="BookProgressText" Margin="10,0" VerticalAlignment="Center" FontSize="12"/>
@@ -194,6 +196,7 @@
                                       LineHeight="1.5"
                                       ColumnWidth="1500"
                                       IsHyphenationEnabled="True"
+                                      
                                       IsColumnWidthFlexible="True"/>
                     </FlowDocumentReader>
                 </Grid>

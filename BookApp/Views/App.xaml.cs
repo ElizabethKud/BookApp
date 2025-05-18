@@ -2,7 +2,7 @@
 using System.Data;
 using System.Windows;
 
-namespace BookApp;
+namespace BookApp.ViewModels;
 
 /// <summary>
 /// Interaction logic for App.xaml

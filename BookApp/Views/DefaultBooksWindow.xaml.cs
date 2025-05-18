@@ -14,16 +14,16 @@ namespace BookApp.Views
     {
         private readonly DatabaseService _dbService = new DatabaseService();
         private readonly int _userId;
-        private readonly MainWindow _mainWindow;
+        private readonly MainWindow _mainView;
 
         public static int CurrentUserId { get; private set; }
 
-        public DefaultBooksWindow(int userId, MainWindow mainWindow)
+        public DefaultBooksWindow(int userId, MainWindow mainView)
         {
             InitializeComponent();
             _userId = userId;
             CurrentUserId = userId;
-            _mainWindow = mainWindow;
+            _mainView = mainView;
             LoadBooks();
         }
 
@@ -102,7 +102,7 @@ namespace BookApp.Views
         {
             if (sender is Button button && button.Tag is Book book)
             {
-                _mainWindow.OpenBook(book.FilePath);
+                _mainView.OpenBook(book.FilePath);
                 Close();
             }
         }
