@@ -3,13 +3,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:BookApp.Views"
         xmlns:services="clr-namespace:BookApp.Services"
-        Title="Базовые книги" Height="400" Width="600"
+        Title="Базовые книги" Height="400" Width="800"
         Background="#F0F0F0"
         WindowStartupLocation="CenterOwner">
     <Window.Resources>
         <services:AuthorNameConverter x:Key="AuthorNameConverter"/>
-        <services:AverageRatingConverter x:Key="AverageRatingConverter"/>
+        <services:RatingConverter x:Key="AverageRatingConverter"/>
         <services:IsReadConverter x:Key="IsReadConverter"/>
+        <services:GenresConverter x:Key="GenresConverter"/> <!-- Новый конвертер для жанров -->
         <Style TargetType="Button">
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Padding" Value="10,5"/>
@@ -78,8 +79,12 @@
         <DataGrid x:Name="BooksGrid" Grid.Row="0" SelectionChanged="BooksGrid_SelectionChanged">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Название" Binding="{Binding Title}" Width="*"/>
-                <DataGridTextColumn Header="Автор" Binding="{Binding BookAuthors, Converter={StaticResource AuthorNameConverter}}" Width="*"/>
-                <DataGridTextColumn Header="Рейтинг" Binding="{Binding Ratings, Converter={StaticResource AverageRatingConverter}}" Width="Auto"/>
+                <DataGridTextColumn Header="Автор" Binding="{Binding BookAuthors, Converter={StaticResource AuthorNameConverter}}" Width="150"/>
+                <DataGridTextColumn Header="Год" Binding="{Binding PublicationYear, StringFormat={}{0:####}, FallbackValue=Не указано}" Width="80"/>
+                <DataGridTextColumn Header="Страниц" Binding="{Binding PagesCount, FallbackValue=Не указано}" Width="80"/>
+                <DataGridTextColumn Header="Язык" Binding="{Binding Language, FallbackValue=Не указано}" Width="100"/>
+                <DataGridTextColumn Header="Жанры" Binding="{Binding BookGenres, Converter={StaticResource GenresConverter}}" Width="*"/>
+                <DataGridTextColumn Header="Рейтинг" Binding="{Binding Ratings, Converter={StaticResource AverageRatingConverter}}" Width="80"/>
                 <DataGridTemplateColumn Header="Прочитано" Width="Auto">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>

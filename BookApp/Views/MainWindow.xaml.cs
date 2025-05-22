@@ -23,9 +23,10 @@ namespace BookApp
         private readonly DatabaseService _dbService = new DatabaseService();
         private readonly BookParserService _parserService = new BookParserService();
         private readonly FileDialogService _fileDialogService = new FileDialogService();
+        private readonly RecommendationService _recommendationService = new RecommendationService();
         private string _currentUser;
         private int _currentUserId;
-        private Book _currentBook;
+        public Book _currentBook;
         private ReadingHistory _currentReadingHistory;
         private List<(bool isChapterStart, bool isTitle, bool isToc, Block block)> _bookContent = new();
         private List<(string title, string anchorName)> _tableOfContents = new();
@@ -272,7 +273,7 @@ namespace BookApp
             catch (Exception ex)
             {
                 Debug.WriteLine($"Ошибка открытия книги: {ex.Message}");
-                MessageBox.Show($"Ошибка при открытии книги: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Ошибка при открытия книги: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -316,7 +317,7 @@ namespace BookApp
                 }
             }
         }
-        
+
         private void Hyperlink_RequestNavigate(object sender, RequestNavigateEventArgs e)
         {
             if (sender is Hyperlink hyperlink)
@@ -352,7 +353,7 @@ namespace BookApp
             UpdateProgressDisplay();
         }
 
-        private void SaveReadingPosition(TextPointer position)
+        public void SaveReadingPosition(TextPointer position)
         {
             if (_currentBook == null || _currentUserId == 0 || position == null) return;
 
@@ -489,10 +490,10 @@ namespace BookApp
             }
         }
 
-        private ScrollViewer FindScrollViewer(DependencyObject parent)
+        public ScrollViewer FindScrollViewer(DependencyObject parent)
         {
             if (parent == null) return null;
-    
+
             for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
             {
                 var child = VisualTreeHelper.GetChild(parent, i);
@@ -764,7 +765,7 @@ namespace BookApp
             return section;
         }
 
-        private void UpdateProgressDisplay()
+        public void UpdateProgressDisplay()
         {
             if (_currentBook == null || _bookContent == null || !_bookContent.Any())
             {
@@ -786,7 +787,7 @@ namespace BookApp
 
             BookProgressText.Text = $"Страница: {Math.Max(1, estimatedPage)}/{Math.Max(1, totalPages)} ({progress:F1}%)";
         }
-        
+
         private int EstimateCurrentPage(TextPointer position)
         {
             var documentStart = LeftPageDocument.ContentStart;
@@ -840,7 +841,8 @@ namespace BookApp
 
         private void Favorites_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("Избранные книги...");
+            var favoritesWindow = new FavoritesWindow(_currentUserId);
+            favoritesWindow.ShowDialog();
         }
 
         private void TableOfContents_Click(object sender, RoutedEventArgs e)
@@ -879,6 +881,24 @@ namespace BookApp
                 }
             }
             return null;
+        }
+
+        private void ShowBookmarks_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentBook == null)
+            {
+                MessageBox.Show("Книга не открыта.", "Информация", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var bookmarksWindow = new BookmarksWindow(_currentUserId, _currentBook.Id, this);
+            bookmarksWindow.ShowDialog();
+        }
+
+        private void ShowRecommendations_Click(object sender, RoutedEventArgs e)
+        {
+            var recommendationsWindow = new RecommendationsWindow(_currentUserId, this);
+            recommendationsWindow.ShowDialog();
         }
 
         private void MarkAsReadCheckBox_Checked(object sender, RoutedEventArgs e)

@@ -97,5 +97,3 @@ CREATE TABLE IF NOT EXISTS book_genre (
     book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     genre_id INTEGER NOT NULL REFERENCES genres(id) ON DELETE CASCADE
 );
-
-SELECT * from books;

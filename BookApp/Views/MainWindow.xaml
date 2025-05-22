@@ -166,6 +166,40 @@
                 </Button.Triggers>
             </Button>
             <Button Content="Закладки" Margin="5">
+                <Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Показать закладки" Click="ShowBookmarks_Click"/>
+                    </ContextMenu>
+                </Button.ContextMenu>
+                <Button.Triggers>
+                    <EventTrigger RoutedEvent="Button.Click">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <BooleanAnimationUsingKeyFrames Storyboard.TargetProperty="ContextMenu.IsOpen">
+                                    <DiscreteBooleanKeyFrame KeyTime="0:0:0" Value="True"/>
+                                </BooleanAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </Button.Triggers>
+            </Button>
+            <Button Content="Рекомендации" Margin="5">
+                <Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Показать рекомендации" Click="ShowRecommendations_Click"/>
+                    </ContextMenu>
+                </Button.ContextMenu>
+                <Button.Triggers>
+                    <EventTrigger RoutedEvent="Button.Click">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <BooleanAnimationUsingKeyFrames Storyboard.TargetProperty="ContextMenu.IsOpen">
+                                    <DiscreteBooleanKeyFrame KeyTime="0:0:0" Value="True"/>
+                                </BooleanAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </Button.Triggers>
             </Button>
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Background="#E0E0E0" Height="30" VerticalAlignment="Center">
@@ -196,9 +230,22 @@
                                       LineHeight="1.5"
                                       ColumnWidth="1500"
                                       IsHyphenationEnabled="True"
-                                      
                                       IsColumnWidthFlexible="True"/>
                     </FlowDocumentReader>
+                    <!-- Значок закладки (флажок) -->
+                    <Path x:Name="BookmarkIcon"
+                          Data="M0,0 L20,0 L10,20 Z"
+                          Fill="Transparent"
+                          Stroke="Black"
+                          StrokeThickness="1"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Top"
+                          Margin="0,10,10,0"
+                          Visibility="{Binding Visibility, ElementName=BookTitleTextBlock}">
+                        <Path.RenderTransform>
+                            <RotateTransform Angle="-90" CenterX="10" CenterY="10"/>
+                        </Path.RenderTransform>
+                    </Path>
                 </Grid>
             </Border>
         </Grid>

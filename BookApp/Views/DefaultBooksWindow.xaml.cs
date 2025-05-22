@@ -36,6 +36,7 @@ namespace BookApp.Views
                     .Include(b => b.BookAuthors).ThenInclude(ba => ba.Author)
                     .Include(b => b.Ratings)
                     .Include(b => b.ReadingHistory)
+                    .Include(b => b.BookGenres).ThenInclude(bg => bg.Genre) // Добавляем жанры
                     .Where(b => b.IsDefault)
                     .ToList();
                 BooksGrid.ItemsSource = books;
